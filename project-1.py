@@ -13,34 +13,49 @@ plt.rcParams["figure.figsize"] = (15,7)
 # Random seed
 np.random.seed(1000)
 
-# Case selection (Data function)
+# Case selection (Data function, y)
 case_s = ['1d', '2d', 'Franke']
 case = case_s[0]
 
-a, b, c = 1.0, 1.5, 0.05
+# Grid and data setup
+a, b  = 1.0, 1.5                            # Coefficients for exponential model
+c     = 0.05                                # Noise scaling    
+x0,xN = 0, 1                                # Start and end of domain, x-axis
+y0,yN = 0, 1                                # Start and end of domain, y-axis
+N     = 100                                 # Number of sample points
+x     = np.sort(np.random.uniform(x0,xN,N)) # Mesh points on x-axis (uniformly distributed, sorted values)
+y     = np.sort(np.random.uniform(y0,yN,N)) # Mesh points on y-axis (uniformly distributed, sorted values)
+x_n   = np.random.normal(0, c, x.shape)     # Noise for x-axis
+y_n   = np.random.normal(0, c, y.shape)     # Noise for y-axis
+
+## Polynomial degree setup
+maxdegree   = 5
+poly_deg    = np.arange(1,maxdegree+1,1)
+
+# Training and test data ratio
 train_split = 4.0/5.0
 test_split  = 1.0 - train_split 
+train_l     = int(np.round(len(x)*train_split))
+test_l      = int(np.round(len(x)*test_split))
 
-x0,xN = 0, 1
-y0,yN = 0, 1
-N = 100
-x = np.sort(np.random.uniform(x0,xN,N))#np.linspace(x0,xN,N)
-y = np.sort(np.random.uniform(y0,yN,N))
-x_n = np.random.normal(0, c, x.shape)#np.random.randn(N)
-y_n = np.random.normal(0, c, x.shape)
+## Dictionaries for storing values from regression analysis
+y_train, y_test = {},{}
+intcept, betas  = {},{}
+mse_s, r2_s     = {},{}
 
+## OLS-regression
+# Loop storage for output values from regression
+y_tr_ols, y_ts_ols = {},{}
+itcpt_ols,btas_ols = {},{}
+mse_ols,r2_ols     = {},{}
 
-maxdegree = 5
-poly_deg = np.arange(1,maxdegree+1,1)
-train_l = int(np.round(len(x)*train_split)); test_l = int(np.round(len(x)*test_split))
-print(train_l)
-print(test_l)
+# Storing intercept values for OLS-analysis for using in Ridge and Lasso-analysis
+beta_0 = np.zeros(maxdegree)
 
-y_train_ols, y_test_ols = np.zeros((train_l,maxdegree)),np.zeros((test_l,maxdegree))
-intcept_ols, betas_ols      = np.zeros(maxdegree),[]
-mse_s_ols, r2s_s_ols    = np.zeros((2,maxdegree)),np.zeros((2,maxdegree))
+# OLS loop
 for i, p_d in enumerate(poly_deg):
-    #print(i, p_d)
+
+    # Data model selection
     if case == '1d':
         z_data = exp1D(x,x_n,a=a,b=b,noise=c)
         X = poly_model_1d(x=x,poly_deg=p_d)
@@ -51,16 +66,30 @@ for i, p_d in enumerate(poly_deg):
         z = Franke(x,y,x_n,y_n,noise=c)
         X = poly_model2d(x=x,y=y,poly_deg=p_d)
     
-    y_train_ols[:,i],y_test_ols[:,i],intcept_ols[i],beta_tmp,mse_s_ols[:,i],r2s_s_ols[:,i] = OLS(y_data=z_data,X=X,split=test_split)#,scaling=False)
-    betas_ols.append(beta_tmp)
-    #print(betas[i])
+
+    y_train_tmp,y_test_tmp,intcept_tmp,beta_tmp,mse_s_tmp,r2_s_tmp = RegOLS(y_data=z_data,X=X,split=test_split)
+
+    y_tr_ols['train_p_'+str(p_d)] = y_train_tmp; y_ts_ols['test_p_'+str(p_d)] = y_test_tmp
+    itcpt_ols['p_'+str(p_d)] = intcept_tmp; btas_ols['beta_p_'+str(p_d)] = beta_tmp
+    mse_ols['p_'+str(p_d)] = mse_s_tmp; r2_ols['p_'+str(p_d)] = r2_s_tmp 
+
+    beta_0[i] = intcept_tmp
+
+y_train['y_tr_ols'] = y_tr_ols; y_test['y_ts_ols'] = y_ts_ols; 
+intcept['intercept_ols'] = itcpt_ols; betas['betas_ols'] = btas_ols
+mse_s['mse_ols'] = mse_ols; r2_s['r2_ols'] = r2_ols
 
 lmbda = [1e-4,1e-3,1e-2,1e-1,1e0]
-y_train_ridge, y_test_ridge = np.zeros((train_l,maxdegree)),np.zeros((test_l,maxdegree))
-intcept_ridge, betas_ridge  = np.zeros((maxdegree,maxdegree)),[]
-mse_s_ridge, r2s_s_ridge    = [],[] #np.zeros((2,maxdegree)),np.zeros((2,maxdegree))
+## Ridge-regression
+# Loop storage for output values from regression
+y_tr_ridge, y_ts_ridge = {},{}
+itcpt_ridge,btas_ridge = {},{}
+mse_ridge,r2_ridge     = {},{}
+
+# Ridge loop
 for i, p_d in enumerate(poly_deg):
-    #print(i, p_d)
+
+    # Data model selection
     if case == '1d':
         z_data = exp1D(x,x_n,a=a,b=b,noise=c)
         X = poly_model_1d(x=x,poly_deg=p_d)
@@ -71,25 +100,74 @@ for i, p_d in enumerate(poly_deg):
         z = Franke(x,y,x_n,y_n,noise=c)
         X = poly_model2d(x=x,y=y,poly_deg=p_d)
 
-    y_train_ridge[:,i],y_test_ridge[:,i],intcept_ridge[:,i],beta_tmp,mse_tmp,r2s_tmp = Ridge(y_data=z_data,X=X,lmbda=lmbda,
-                                                                                                             intcept=intcept_ols,split=test_split,prnt=True)
-    betas_ridge.append(beta_tmp); mse_s_ridge.append(mse_tmp); r2s_s_ridge.append(r2s_tmp)
+    y_train_tmp,y_test_tmp,intcept_tmp,beta_tmp,mse_s_tmp,r2_s_tmp = RegRidge(y_data=z_data,X=X,lmbda=lmbda,
+                                                                                intcept=beta_0,split=test_split,prnt=True)
 
-print(len(betas_ridge))
-print(betas_ridge[1])
+    y_tr_ridge['train_p_'+str(p_d)] = y_train_tmp; y_ts_ridge['test_p_'+str(p_d)] = y_test_tmp
+    itcpt_ridge['p_'+str(p_d)] = intcept_tmp; btas_ridge['beta_p_'+str(p_d)] = beta_tmp
+    mse_ridge['p_'+str(p_d)] = mse_s_tmp; r2_ridge['p_'+str(p_d)] = r2_s_tmp 
 
+y_train['y_tr_ridge'] = y_tr_ridge; y_test['y_ts_ridge'] = y_ts_ridge; 
+intcept['intercept_ridge'] = itcpt_ridge; betas['betas_ridge'] = btas_ridge
+mse_s['mse_ridge'] = mse_ridge; r2_s['r2_ridge'] = r2_ridge
 
-## Plotting results for OLS-regression
-#plot_OLS(poly_deg,y_data=[mse_s_ols,r2s_s_ols],x_label='poly. degree',y_labels=['MSE','R²'])
+## Lasso Regression
+# Loop storage for output values from regression
+y_tr_lasso, y_ts_lasso = {},{}
+itcpt_lasso,btas_lasso = {},{}
+mse_lasso,r2_lasso     = {},{}
+
+# Lasso loop
+for i, p_d in enumerate(poly_deg):
+
+    # Data model selection
+    if case == '1d':
+        z_data = exp1D(x,x_n,a=a,b=b,noise=c)
+        X = poly_model_1d(x=x,poly_deg=p_d)
+    elif case == '2d':
+        z_data = exp2D(x,y,x_n,y_n,a=a,b=b,noise=c)
+        X = poly_model2d(x=x,y=y,poly_deg=p_d)
+    elif case == 'Franke':
+        z = Franke(x,y,x_n,y_n,noise=c)
+        X = poly_model2d(x=x,y=y,poly_deg=p_d)
+
+    y_train_tmp,y_test_tmp,intcept_tmp,beta_tmp,mse_s_tmp,r2_s_tmp = RegLasso(y_data=z_data,X=X,lmbda=lmbda,
+                                                                                intcept=beta_0,maxit=2000,split=test_split,prnt=True)
+    
+    y_tr_lasso['train_p_'+str(p_d)] = y_train_tmp; y_ts_lasso['test_p_'+str(p_d)] = y_test_tmp
+    itcpt_lasso['p_'+str(p_d)] = intcept_tmp; btas_lasso['beta_p_'+str(p_d)] = beta_tmp
+    mse_lasso['p_'+str(p_d)] = mse_s_tmp; r2_lasso['p_'+str(p_d)] = r2_s_tmp 
+
+y_train['y_tr_lasso'] = y_tr_lasso; y_test['y_ts_lasso'] = y_ts_lasso; 
+intcept['intercept_lasso'] = itcpt_lasso; betas['betas_lasso'] = btas_lasso
+mse_s['mse_lasso'] = mse_lasso; r2_s['r2_lasso'] = r2_lasso
+
+print(list(mse_s['mse_ols']))
+print(type(mse_s['mse_ols']))
+ms = mse_s['mse_ols']
+print(type(ms['p_1']))
+print((ms['p_1']))
+
+"""Have to change the plotting functions to use dict-keys instead of list/ndarrays"""
+
+## Plotting results
+# Packing up metrics for plotting
+#for p_d in range(len(poly_deg)):
+    #mse_s_ols
+#plot_OLS(poly_deg,y_data=[mse_s_ols,r2s_s_ols],labels=['OLS','poly.deg','MSE','R²'])
 #beta_plot(poly_deg,betas_ols,x_label='poly. degree',y_label=r'$\hat{\beta}$')
-#plot_reg1D(x_data=x,y_data=z_data,b_data=betas_ols,b0=intcept_ols)
+#plot_reg1D(x_data=x,y_data=z_data,b_data=betas_ols,b0=intcept_ols,labels=['OLS','x',r'$\tilde{y}$(x)'])
 
 ## Plotting results for Ridge-regression 
-#plot_RiLa(poly_deg,y_data=[mse_s_ridge,r2s_s_ridge],x_label='poly.deg',y_labels=['MSE','R²'],lmbda=lmbda)
+#plot_RiLa(poly_deg,y_data=[mse_s_ridge,r2s_s_ridge],labels=['Ridge','poly.deg','MSE','R²'],lmbda=lmbda)
+#plot_RiLa(poly_deg,y_data=[mse_s_lasso,r2s_s_lasso],labels=['Lasso','poly.deg','MSE','R²'],lmbda=lmbda)
+
+#print(len(mse_s_ridge[0][1]))
+#print(len(mse_s_ols[0]))
+
+plot_compare(x_data=poly_deg,y_data=[mse_s,r2_s],labels=['','poly.deg','MSE','R²'])
+
+#plot_reg1D(x_data=x,y_data=z_data,b_data=betas_ols,b0=intcept_ols,labels=['OLS','x',r'$\tilde{y}$(x)'])
 
 #plt.show()
-
-
-
-
 

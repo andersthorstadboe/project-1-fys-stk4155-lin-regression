@@ -1,9 +1,29 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from support_funcs import poly_model_1d, exp1D, exp2D, poly_model2d, Franke
-from reg_functions import OLS
+from reg_functions import RegOLS
 from mpl_toolkits.mplot3d import Axes3D
 
+r = {}
+s = {}
+a = 1 + 2
+b = 1
+
+r['a'] = a; r['b'] = b
+s['c'] = b + a; s['d'] = a*2
+#print(r)
+print(list(r),list(s))
+q = {}
+q['r'] = r; q['s'] = s
+print(list(q['r']))
+print(type(q['r']))
+print(len(q['r']))
+#print(r['a'])
+
+
+
+
+'''
 mse = []
 r2 = []
 
@@ -33,7 +53,7 @@ print(d)
 
 
 
-'''
+
 np.random.seed(2081)
 
 b, c = 1.5, 0.02
