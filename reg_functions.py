@@ -1,10 +1,12 @@
 ### Imports
 import numpy as np
 import sklearn.linear_model as sk_lin
-from sklearn.linear_model import Lasso
+#from sklearn.linear_model import Lasso
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score,mean_squared_error
-from support_funcs import SVDcalc
+from support_funcs import SVDcalc,poly_model_1d, poly_model_2d
 
 ### Metric functions
 
@@ -47,7 +49,344 @@ def r2score(y_data: np.ndarray, y_model: np.ndarray):
 
 ### Regression Functions
 
-def RegOLS(y_data, X, split=0.0, scaling=True, prnt=False):
+def RegOLS_skl(y_data: list,x_data: list,polydeg: int, scale=True, prnt=False):
+    """
+    
+    """
+
+    if len(x_data) > 2:
+        X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=polydeg)
+        X_test = poly_model_2d(x=x_data[1],y=x_data[3],poly_deg=polydeg)
+    else:
+        X_train = poly_model_1d(x=x_data[0],poly_deg=polydeg)
+        X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
+
+    y_tr_mean = np.mean(y_data[0],axis=0)
+    X_tr_mean = np.mean(X_train,axis=0)
+    
+    if scale == True:
+        y_tr_s = y_data[0] - y_tr_mean
+        X_tr_s = X_train - X_tr_mean
+    else: 
+        y_tr_s = y_data[0]
+        X_tr_s = X_train
+    #y_tr_s = y_data[0] - y_tr_mean; y_ts_s = y_data[1] - y_ts_mean
+    #X_tr_s = X_train - X_tr_mean; X_ts_s = X_test - X_ts_mean 
+
+    # Scikit-learn linear regression method, no intercept, scaled data
+    reg_OLS = sk_lin.LinearRegression(fit_intercept=scale)
+
+    if scale == True:
+        reg_OLS.fit(X_train,y_data[0])
+    else:
+        reg_OLS.fit(X_tr_s,y_tr_s)
+
+    y_ols_train = reg_OLS.predict(X_train)
+    y_ols_test = reg_OLS.predict(X_test)
+
+    intcept_ols = reg_OLS.intercept_[0]
+    beta_ols = reg_OLS.coef_
+    print(beta_ols)
+
+    mse_ols = [mse_own(y_data[0],y_ols_train),mse_own(y_data[1],y_ols_test)]
+    mse_sk  = [mean_squared_error(y_data[0],y_ols_train),mean_squared_error(y_data[1],y_ols_test)]
+
+    r2s_ols = [r2score(y_data[0],y_ols_train),r2score(y_data[1],y_ols_test)]
+    r2s_sk  = [r2_score(y_data[0],y_ols_train),r2_score(y_data[1],y_ols_test)]    
+
+    if prnt == True:
+        print('\nError metrics, p =', polydeg)
+        print('MSE (Own):\nTraining: %g | Test: %g' %(mse_ols[0],mse_ols[1]))
+        print('MSE (Scikit):\nTraining: %g | Test: %g' %(mse_sk[0],mse_sk[1]))
+        print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
+        print('R² (Scikit):\nTraining: %g | Test: %g' %(r2s_sk[0],r2s_sk[1]))
+
+    return y_ols_train,y_ols_test, intcept_ols, beta_ols, mse_ols, r2s_ols
+
+def RegOLS(y_data: list,x_data: list,polydeg: int, scale=True, prnt=False):
+    """
+    Performs a ordinary least square regression analysis based on input data, (x, y)\n
+    'The intercept column of X must be ommitted.\n'
+    Calculates β-values, intercept, and a prediction model, as well as the MSE and R²-metrics for the this model
+    """
+    ## Making design matrices for training and test data (checking if we are in a 1d- or 2d-case)
+    if len(x_data) > 2:
+        X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=polydeg)
+        X_test = poly_model_2d(x=x_data[1],y=x_data[3],poly_deg=polydeg)
+    else:
+        X_train = poly_model_1d(x=x_data[0],poly_deg=polydeg)
+        X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
+
+    ## Scaling the training data by subtracting the mean
+    
+    y_tr_mean = np.mean(y_data[0],axis=0)
+    X_tr_mean = np.mean(X_train,axis=0)
+    
+    if scale == True:
+        y_tr_s = y_data[0] - y_tr_mean
+        X_tr_s = X_train - X_tr_mean
+    else: 
+        y_tr_s = y_data[0]
+        X_tr_s = X_train
+
+    ## Optimization
+    # Optimizing with training data, using a SVD-method
+    try:
+        beta_ols = (np.linalg.inv(X_tr_s.T @ X_tr_s) @ X_tr_s.T @ y_tr_s)
+    except np.linalg.LinAlgError:
+        print('LinAlgError, singular matrix in (X^T X)^{-1}, using SVD-method to calc β-values')
+        beta_ols = SVDcalc(X_tr_s) @ y_tr_s
+
+    # Calculating the intercept
+    intcept_ols = np.mean(y_tr_mean - X_tr_mean @ beta_ols)
+
+    # Predictions, including the intercept (on unscaled data)
+    y_ols_train = X_train @ beta_ols + intcept_ols
+    y_ols_test  = X_test @ beta_ols + intcept_ols
+
+    ## Regression metrics, MSE and R²-score
+    mse_ols = [mse_own(y_data[0],y_ols_train),mse_own(y_data[1],y_ols_test)]
+    mse_sk  = [mean_squared_error(y_data[0],y_ols_train),mean_squared_error(y_data[1],y_ols_test)]
+
+    r2s_ols = [r2score(y_data[0],y_ols_train),r2score(y_data[1],y_ols_test)]
+    r2s_sk  = [r2_score(y_data[0],y_ols_train),r2_score(y_data[1],y_ols_test)]    
+    if prnt == True:
+        print('\nError metrics, p =', polydeg)
+        print('MSE (Own):\nTraining: %g | Test: %g' %(mse_ols[0],mse_ols[1]))
+        print('MSE (Scikit):\nTraining: %g | Test: %g' %(mse_sk[0],mse_sk[1]))
+        print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
+        print('R² (Scikit):\nTraining: %g | Test: %g' %(r2s_sk[0],r2s_sk[1]))
+
+    return y_ols_train,y_ols_test, intcept_ols, beta_ols, mse_ols, r2s_ols
+
+def RegRidge(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float, scale=True, prnt=False):
+    """
+    
+    """
+    ## Making design matrices for training and test data (checking if we are in a 1d- or 2d-case)
+    if len(x_data) > 2:
+        X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=polydeg)
+        X_test = poly_model_2d(x=x_data[1],y=x_data[3],poly_deg=polydeg)
+    else:
+        X_train = poly_model_1d(x=x_data[0],poly_deg=polydeg)
+        X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
+
+    ## Scaling the training data by subtracting the mean
+    y_tr_mean = np.mean(y_data[0],axis=0)
+    X_tr_mean = np.mean(X_train,axis=0)
+    
+    if scale == True:
+        y_tr_s = y_data[0] - y_tr_mean
+        X_tr_s = X_train - X_tr_mean
+    else: 
+        y_tr_s = y_data[0]
+        X_tr_s = X_train
+
+    # Identity matrix
+    id = np.eye(len(X_tr_s[0,:]),len(X_tr_s[0,:]))
+
+    ## Optimization
+    # Loop for Ridge optimization with different lambdas
+    MSE_ridge_train = np.zeros(len(lmbda)); r2_ridge_train = np.zeros(len(lmbda))
+    MSE_ridge_test  = np.zeros(len(lmbda)); r2_ridge_test  = np.zeros(len(lmbda))
+    beta_store = []
+    for i, lmb in enumerate(lmbda):
+        beta_ridge = (np.linalg.inv((X_tr_s.T @ X_tr_s) + lmb*id) @ X_tr_s.T @ y_tr_s)
+        
+        # Storing beta values for lambda
+        beta_store.append(beta_ridge)
+        
+        # Prediction with added intercept (not centered anymore)
+        y_ridge_train = X_train @ beta_ridge + intcept
+        y_ridge_test  = X_test @ beta_ridge + intcept
+
+        # Storing MSE and R²-scores
+        MSE_ridge_train[i] = mse_own(y_data[0], y_ridge_train)
+        MSE_ridge_test[i] = mse_own(y_data[1], y_ridge_test)
+
+        r2_ridge_train[i] = r2score(y_data[0], y_ridge_train)
+        r2_ridge_test[i] = r2score(y_data[1], y_ridge_test)
+
+    if prnt == True:
+        print('\nError metrics, p =', polydeg)
+        print('MSE (Own):\nTraining: ',MSE_ridge_train)
+        print('Test    : ',MSE_ridge_test)
+        print('R²-score (Own):\nTraining: ',r2_ridge_train)
+        print('Test    : ',r2_ridge_test)
+        
+    return y_ridge_train,y_ridge_test, intcept, beta_store, [MSE_ridge_train,MSE_ridge_test], [r2_ridge_train,r2_ridge_test]
+
+def RegLasso(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float, maxit=1000, scale=True, prnt=False):
+    """
+    
+    """
+    ## Making design matrices for training and test data (checking if we are in a 1d- or 2d-case)
+    if len(x_data) > 2:
+        X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=polydeg)
+        X_test = poly_model_2d(x=x_data[1],y=x_data[3],poly_deg=polydeg)
+    else:
+        X_train = poly_model_1d(x=x_data[0],poly_deg=polydeg)
+        X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
+
+    ## Scaling the training data by subtracting the mean
+    y_tr_mean = np.mean(y_data[0],axis=0)
+    X_tr_mean = np.mean(X_train,axis=0)
+    
+    if scale == True:
+        y_tr_s = y_data[0] - y_tr_mean
+        X_tr_s = X_train - X_tr_mean
+    else: 
+        y_tr_s = y_data[0]
+        X_tr_s = X_train
+
+    ## Optimization
+    # Loop for Lasso optimization with different lambdas
+    MSE_lasso_train = np.zeros(len(lmbda)); r2_lasso_train = np.zeros(len(lmbda))
+    MSE_lasso_test  = np.zeros(len(lmbda)); r2_lasso_test  = np.zeros(len(lmbda))
+    beta_store = []
+
+    for i, lmb in enumerate(lmbda):
+        
+        # Importing and fitting Lasso model
+        reg_lasso = sk_lin.Lasso(lmb,fit_intercept=False,max_iter=maxit)
+        reg_lasso.fit(X_tr_s,y_tr_s)
+        
+        # Storing beta values for lambda
+        #beta_lasso = reg_lasso.coef_
+        beta_store.append(reg_lasso.coef_)
+        #intcept = reg_lasso.intercept_
+        #print(intcept)
+        #print(reg_lasso.coef_)
+        
+        # Prediction with added intercept (not centered anymore)
+        y_lasso_train = reg_lasso.predict(X_train) + intcept
+        y_lasso_test  = reg_lasso.predict(X_test) + intcept
+
+        # Storing MSE and R²-scores
+        MSE_lasso_train[i] = mse_own(y_data[0], y_lasso_train)
+        MSE_lasso_test[i] = mse_own(y_data[1], y_lasso_test)
+
+        r2_lasso_train[i] = r2score(y_data[0], y_lasso_train)
+        r2_lasso_test[i] = r2score(y_data[1], y_lasso_test)
+    
+    if prnt == True:
+        print('\nError metrics, p =', polydeg)
+        print('MSE (Own):\nTraining: ',MSE_lasso_train)
+        print('Test    : ',MSE_lasso_test)
+        print('R²-score (Own):\nTraining: ',r2_lasso_train)
+        print('Test    : ',r2_lasso_test)
+
+    return y_lasso_train,y_lasso_test, intcept, beta_store, [MSE_lasso_train,MSE_lasso_test], [r2_lasso_train,r2_lasso_test]
+
+def RegLasso1(y_data, X, lmbda, intcept, maxit=1000, split=0.0, scaling=True, prnt=False):
+    """
+    Performs a Lasso regression analysis based on input data (y, X), for input λ-values.\n 
+    The intercept column of X must be ommitted.\n
+    Uses the sklearn.linear_model Lasso-method for the prediction.
+    
+    Parameters
+    ---
+    y_data : ndarray
+        Data set
+    X : ndarray, n x (p-1)
+        Design matrix without the intercept included
+    lmbda : list
+        List of λ-values to do analysis with
+    intcept : float
+        Intercept values for the different cases for y-model based on OLS-regression analysis
+    maxit : int
+        Setting the maximum number of iterations for the Lasso-method. Increase with warned about convergence issues
+    split : float, Default = 0.0
+        The amount of data that will be used for testing the model
+    scaling: bool, Default = True
+        Whether or not data will be scaled before prediction
+    prnt : bool, Default = False
+        Gives regression metric output in terminal if selected
+
+    Returns
+    ---
+    y_ridge_train : ndarray
+
+    y_ridge_test : 
+
+    intcept : ndarray
+
+    beta_store : list
+
+    MSE_ridge : list
+
+    R2_ridge : list
+    """
+    ## Splitting and scaling conditions  
+    if split != 0.0:
+        X_train, X_test, y_train, y_test = train_test_split(X,y_data,test_size=split)
+        #print('splitting')
+    else: # Need to verify
+        #print('not splitting')
+        y_train = y_data; y_test = y_data
+        X_train = X; X_test = 0
+    
+    if scaling == True:
+        #print('scaling')
+        # Scaling with the mean value of columns of X
+        y_train_mean = np.mean(y_train)
+        X_train_mean = np.mean(X_train,axis=0)
+        
+    else: # NOT WORKING AS INTENDED
+        #print('not scaling')
+        y_train_mean = 0.0 #np.mean(y_train)
+        X_train_mean = 0.0 #np.mean(X_train,axis=0)
+        
+    y_train_s = y_train - y_train_mean
+    X_train_s = X_train - X_train_mean 
+    X_test_s  = X_test  - X_train_mean
+
+    # Identity matrix
+    id = np.eye(len(X[0,:]),len(X[0,:]))
+    #print('I: ',id.shape)
+    #print(id)
+
+    ## Optimization
+    # Loop for Lasso optimization with different lambdas
+    MSE_lasso_train = np.zeros(len(lmbda)); r2_lasso_train = np.zeros(len(lmbda))
+    MSE_lasso_test  = np.zeros(len(lmbda)); r2_lasso_test  = np.zeros(len(lmbda))
+    beta_store = []
+
+    for i, lmb in enumerate(lmbda):
+        
+        # Importing and fitting Lasso model
+        reg_lasso = sk_lin.Lasso(lmb,fit_intercept=False,max_iter=maxit)
+        reg_lasso.fit(X_train_s,y_train_s)
+        
+        # Storing beta values for lambda
+        #beta_lasso = reg_lasso.coef_
+        beta_store.append(reg_lasso.coef_)
+        
+        # Prediction with added intercept (not centered anymore)
+        y_lasso_train = reg_lasso.predict(X_train_s) + intcept[i]
+        y_lasso_test  = reg_lasso.predict(X_test_s) + intcept[i]
+
+        # Storing MSE and R²-scores
+        MSE_lasso_train[i] = mse_own(y_train, y_lasso_train)
+        MSE_lasso_test[i] = mse_own(y_test, y_lasso_test)
+
+        r2_lasso_train[i] = r2score(y_train, y_lasso_train)
+        r2_lasso_test[i] = r2score(y_test, y_lasso_test)
+
+        # COPIED FROM OLS-FUNCTION, MUST BE REWRITTEN
+        #if prnt == True:
+        #    print('Error metrics')
+        #    print('MSE (Own):\nTraining: %g | Test: %g' %(mse_ols[0],mse_ols[1]))
+        #    print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
+
+    return y_lasso_train,y_lasso_test, intcept, beta_store, [MSE_lasso_train,MSE_lasso_test], [r2_lasso_train,r2_lasso_test]
+
+
+
+# ------------------------------------------ #
+# ---------------- Obsoletes --------------- #
+# ------------------------------------------ #
+def RegOLS_1(y_data, X, split=0.0, scaling=True, prnt=False):
     """
     Performs a ordinary least square regression analysis based on input data, (y, X)\n
     The intercept column of X must be ommitted.\n
@@ -81,13 +420,15 @@ def RegOLS(y_data, X, split=0.0, scaling=True, prnt=False):
         X_train = X; X_test = 0
     
     if scaling == True:
-        #print('scaling')
+        print('scaling')
         # Scaling with the mean value of columns of X
-        y_train_mean = np.mean(y_train)
+        y_train_mean = np.mean(y_train,axis=0)
         X_train_mean = np.mean(X_train,axis=0)
+        print('y_mean: ',y_train_mean)
+        print('X_mean: ',X_train_mean)
         
     else: # NOT WORKING AS INTENDED
-        #print('not scaling')
+        print('not scaling')
         y_train_mean = 0.0 #np.mean(y_train)
         X_train_mean = 0.0 #np.mean(X_train,axis=0)
         
@@ -99,8 +440,11 @@ def RegOLS(y_data, X, split=0.0, scaling=True, prnt=False):
     # Optimizing with training data, using a SVD-method
     try:
         beta_ols = (np.linalg.inv(X_train_s.T @ X_train_s) @ X_train_s.T @ y_train_s)
+        print('Beta: ',beta_ols.ravel())
     except np.linalg.LinAlgError:
+        print('LinAlgError, singular matrix in (X^T X)^{-1}')
         beta_ols = SVDcalc(X_train_s) @ y_train_s
+        print('Beta: ',beta_ols)
 
     # Calculating the intercept
     if scaling == True:
@@ -118,7 +462,7 @@ def RegOLS(y_data, X, split=0.0, scaling=True, prnt=False):
     r2s_ols = [r2score(y_train,y_ols_train),r2score(y_test,y_ols_test)]
     r2s_sk  = [r2_score(y_train,y_ols_train),r2_score(y_test,y_ols_test)]
     if prnt == True:
-        print('Error metrics')
+        print('\nError metrics, p =',len(X[0,:]))
         print('MSE (Own):\nTraining: %g | Test: %g' %(mse_ols[0],mse_ols[1]))
         print('MSE (Scikit):\nTraining: %g | Test: %g' %(mse_sk[0],mse_sk[1]))
         print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
@@ -126,7 +470,7 @@ def RegOLS(y_data, X, split=0.0, scaling=True, prnt=False):
 
     return y_ols_train,y_ols_test, intcept_ols, beta_ols, mse_ols, r2s_ols
 
-def RegRidge(y_data, X, lmbda, intcept, split=0.0, scaling=True, prnt=False):
+def RegRidge1(y_data, X, lmbda, intcept, split=0.0, scaling=True, prnt=False):
     """
     Performs a Ridge regression analysis based on input data (y, X), for input λ-values.\n
     The intercept column of X must be ommitted.\n
@@ -220,107 +564,3 @@ def RegRidge(y_data, X, lmbda, intcept, split=0.0, scaling=True, prnt=False):
         #    print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
     
     return y_ridge_train,y_ridge_test, intcept, beta_store, [MSE_ridge_train,MSE_ridge_test], [r2_ridge_train,r2_ridge_test]
-
-def RegLasso(y_data, X, lmbda, intcept, maxit=1000, split=0.0, scaling=True, prnt=False):
-    """
-    Performs a Lasso regression analysis based on input data (y, X), for input λ-values.\n 
-    The intercept column of X must be ommitted.\n
-    Uses the sklearn.linear_model Lasso-method for the prediction.
-    
-    Parameters
-    ---
-    y_data : ndarray
-        Data set
-    X : ndarray, n x (p-1)
-        Design matrix without the intercept included
-    lmbda : list
-        List of λ-values to do analysis with
-    intcept : ndarray
-        Intercept values for the different cases for y-model based on OLS-regression analysis
-    maxit : int
-        Setting the maximum number of iterations for the Lasso-method. Increase with warned about convergence issues
-    split : float, Default = 0.0
-        The amount of data that will be used for testing the model
-    scaling: bool, Default = True
-        Whether or not data will be scaled before prediction
-    prnt : bool, Default = False
-        Gives regression metric output in terminal if selected
-
-    Returns
-    ---
-    y_ridge_train : ndarray
-
-    y_ridge_test : 
-
-    intcept : ndarray
-
-    beta_store : list
-
-    MSE_ridge : list
-
-    R2_ridge : list
-    """
-    ## Splitting and scaling conditions  
-    if split != 0.0:
-        X_train, X_test, y_train, y_test = train_test_split(X,y_data,test_size=split)
-        #print('splitting')
-    else: # Need to verify
-        #print('not splitting')
-        y_train = y_data; y_test = y_data
-        X_train = X; X_test = 0
-    
-    if scaling == True:
-        #print('scaling')
-        # Scaling with the mean value of columns of X
-        y_train_mean = np.mean(y_train)
-        X_train_mean = np.mean(X_train,axis=0)
-        
-    else: # NOT WORKING AS INTENDED
-        #print('not scaling')
-        y_train_mean = 0.0 #np.mean(y_train)
-        X_train_mean = 0.0 #np.mean(X_train,axis=0)
-        
-    y_train_s = y_train - y_train_mean
-    X_train_s = X_train - X_train_mean 
-    X_test_s  = X_test  - X_train_mean
-
-    # Identity matrix
-    id = np.eye(len(X[0,:]),len(X[0,:]))
-    #print('I: ',id.shape)
-    #print(id)
-
-    ## Optimization
-    # Loop for Lasso optimization with different lambdas
-    MSE_lasso_train = np.zeros(len(lmbda)); r2_lasso_train = np.zeros(len(lmbda))
-    MSE_lasso_test  = np.zeros(len(lmbda)); r2_lasso_test  = np.zeros(len(lmbda))
-    beta_store = []
-
-    for i, lmb in enumerate(lmbda):
-        
-        # Importing and fitting Lasso model
-        reg_lasso = sk_lin.Lasso(lmb,fit_intercept=False,max_iter=maxit)
-        reg_lasso.fit(X_train_s,y_train_s)
-        
-        # Storing beta values for lambda
-        #beta_lasso = reg_lasso.coef_
-        beta_store.append(reg_lasso.coef_)
-        
-        # Prediction with added intercept (not centered anymore)
-        y_lasso_train = reg_lasso.predict(X_train_s) + intcept[i]
-        y_lasso_test  = reg_lasso.predict(X_test_s) + intcept[i]
-
-        # Storing MSE and R²-scores
-        MSE_lasso_train[i] = mse_own(y_train, y_lasso_train)
-        MSE_lasso_test[i] = mse_own(y_test, y_lasso_test)
-
-        r2_lasso_train[i] = r2score(y_train, y_lasso_train)
-        r2_lasso_test[i] = r2score(y_test, y_lasso_test)
-
-        # COPIED FROM OLS-FUNCTION, MUST BE REWRITTEN
-        #if prnt == True:
-        #    print('Error metrics')
-        #    print('MSE (Own):\nTraining: %g | Test: %g' %(mse_ols[0],mse_ols[1]))
-        #    print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
-
-    return y_lasso_train,y_lasso_test, intcept, beta_store, [MSE_lasso_train,MSE_lasso_test], [r2_lasso_train,r2_lasso_test]
-

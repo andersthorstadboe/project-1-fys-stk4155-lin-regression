@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from support_funcs import poly_model_1d, exp1D, exp2D, poly_model2d, Franke
+from support_funcs import poly_model_1d, exp1D, exp2D, poly_model_2d, Franke
 from reg_functions import RegOLS
 from mpl_toolkits.mplot3d import Axes3D
 
