@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 
 ### Test functions
-
 def Franke(x,y,x_noise,y_noise,noise=0.0):
    """
    Returns the Franke function on a mesh grid (x,y) as data function, with or without noise added
@@ -75,7 +74,6 @@ def exp2D(x,y,x_noise,y_noise,a,b,noise=0.0):
    return p1 + noise*x_noise + noise*y_noise
 
 ### Other supporting functions
-
 def poly_model_1d(x: np.ndarray, poly_deg: int):
    """
    Returning a design matrix for a polynomial of a given degree in one variable, x. Starts at i = 1, so intercept column is ommitted from design matrix.
@@ -94,7 +92,6 @@ def poly_model_1d(x: np.ndarray, poly_deg: int):
    """
 
    X = np.zeros((len(x),poly_deg))
-   #print('X shape: ',X.shape)
    for p_d in range(1,poly_deg+1):
       X[:,p_d-1] = x[:,0]**p_d
    
@@ -123,13 +120,18 @@ def poly_model_2d(x: np.ndarray, y: np.ndarray, poly_deg: int):
    cols = int(((poly_deg + 2) * (poly_deg + 1))/2)
    X = np.ones((len(x),cols))
 
-   for p_dx in range(1, poly_deg+1):
+   for p_dx in range(poly_deg+1):
+      
       q = int((p_dx+1)*(p_dx)/2)
-      for p_dy in range((p_dx + 1)):
+      for p_dy in range((p_dx+1)):
+         #print('q, p_dx, p_dy = ',q, p_dx, p_dy)
          #print('x^%g * y^%g' %((p_dx-p_dy),p_dy))
          X[:,q+p_dy] = (x**(p_dx-p_dy)) * (y**p_dy)
 
-   return X
+   #print(X)
+   #print(X[:,1:])
+
+   return X[:,1:]
 
 def SVDcalc(X):
    """
@@ -171,11 +173,11 @@ def plot_OLS(x_data=np.zeros(0),y_data=[],labels=['','','']):
    """
 
    ## Getting the dictionary keys and setting up lists
-   list_vals = []; ax = []; ys1 = []; ys2 = []
+   list_vals = []; fig = []; ys1 = []; ys2 = []
    for i in range(len(y_data)):
       f = list(y_data[i])
       list_vals.append(f)
-      ax.append('ax'+str(i))
+      fig.append('fig'+str(i))
       ys1.append([])
       ys2.append([])
 
@@ -187,17 +189,16 @@ def plot_OLS(x_data=np.zeros(0),y_data=[],labels=['','','']):
          ys2[i].append(y[1])
 
    ## Plotting
-   fig,ax = plt.subplots(len(y_data),1)
-   fig.suptitle(labels[0]+'-regression')
-
    for i in range(len(y_data)):
-      ax[i].plot(x_data,ys1[i],label='Training '+labels[i+2])
-      ax[i].plot(x_data,ys2[i],label='Test '+labels[i+2])
-      ax[i].set_xlabel(labels[1]); ax[i].set_ylabel(labels[i+2],rotation=0,labelpad=15)
-      ax[i].set_title(labels[i+2]+' against polynomial degree')
-      ax[i].grid(); ax[i].legend()
+      fig[i],ax = plt.subplots(1,1)
+      fig[i].suptitle(labels[0]+'-regression')
+      ax.plot(x_data,ys1[i],label='Training '+labels[i+2])
+      ax.plot(x_data,ys2[i],label='Test '+labels[i+2])
+      ax.set_xlabel(labels[1]); ax.set_ylabel(labels[i+2],rotation=0,labelpad=15)
+      ax.set_title(labels[i+2]+' against polynomial degree')
+      ax.grid(); ax.legend()
 
-   fig.tight_layout(pad=2.0,h_pad=1.5)
+      fig[i].tight_layout(pad=2.0,h_pad=1.5)
    #'''
    return 0
 
@@ -232,9 +233,9 @@ def plot_RiLa(x_data,y_data,labels,lmbda):
          ys2[i].append(y[1])
    
    print(len(ys1))
-   print(len(ys1[0][0]))
-   #plt.plot(x_data,ys1[0][0])
-   #'''   
+   print(ys1[0][0].shape)
+   print(x_data.shape)
+   
    for i in range(len(ys1)):
       fig[i],ax = plt.subplots(2,1)
       fig[i].suptitle(labels[0]+'-regression')
@@ -247,7 +248,7 @@ def plot_RiLa(x_data,y_data,labels,lmbda):
          ax[1].set_ylabel(labels[i+2],rotation=0,labelpad=15)
          #ax[1].set_title(labels[i+2]+' against polynomial degree')
          ax[1].grid(); ax[1].legend()
-   #'''
+
    return 0
 
 def plot_heatmap(x_data: list,y_data: list, values: dict, labels: list, clrmap: str='bwr'):
@@ -263,13 +264,16 @@ def plot_heatmap(x_data: list,y_data: list, values: dict, labels: list, clrmap: 
          vals[i][:,j] = values[lst][i]
 
    for i in range(len(vals)):
-      fig[i],ax = plt.subplots(1,1,figsize=(6,6))
+      fig[i],ax = plt.subplots(1,1,figsize=(5,4))
       im = ax.imshow(vals[i],cmap=clrmap)
+      ax.set_aspect(aspect='auto',adjustable='box')
+
       ax.set_xticks(np.arange(len(x_data)),labels=x_data)
-      ax.set_yticks(np.arange(len(y_data)),labels=y_data)
-      cbar = ax.figure.colorbar(im, ax=ax)
+      ax.set_yticks(np.arange(len(y_data)),labels=[f'{y:.2e}' for y in y_data])
+
+      cbar = ax.figure.colorbar(im, ax=ax, ticks=np.linspace(vals[i].min(), vals[i].max(), 10))
       cbar.ax.set_ylabel(labels[1], rotation=-90, va="bottom")
-      ax.set_label(labels[2]); ax.set_ylabel(labels[3],rotation=0)
+      ax.set_xlabel(labels[2]); ax.set_ylabel(labels[3],rotation=0)
       ax.set_title(labels[1]+' against polynomial degree')
       fig[i].suptitle(labels[0]+', '+labels[4+i]+'-data')
       fig[i].tight_layout()
@@ -346,38 +350,22 @@ def plot_reg1D(x_data,y_data,b_data,b0,labels):
    ax.set_title('Regression model for p\'s'); ax.grid(); ax.legend()
    return 0
 
-def plot_compare(x_data,y_data,labels=[],b_data=[]):
-   """ 
-   Creating a plot comparing regression metrics from different regression analysis to eachother.\n
-   Assumes that y_data-entries contains only one set of metrics per analysis
-
-   Parameters
-   ---
-   x_data : ndarray
-      Data to plot regression metrics against 
-   y_data : list
-      List of dictionaries of regression metrics
-   labels : list
-      0: title-label; 1: x_label; 2:end: y_labels, need to be as many as len(y_data)
-   b_data : list
-      If len(b_data) >= 1, ... 
-
-   Returns
-   ---
-   nothing : 0
+def plot2D(x_data, y_data, z_data,labels: list):
    """
-   if len(b_data) >= 1: # TO BE IMPLEMENTED
-      print('nothing')
-   else:
-      print('something')
-
-   fig,ax = [],[]
-
    
-
-   #for i in range(len(y_data)):
-   #   print(0)
-   
-
+   """
+   #plt.rcParams["font.size"] = 5
+   # Plotting initial data
+   fig = plt.figure(figsize=(3.5,(5*3/4)))
+   ax = fig.add_subplot(111,projection='3d')
+   #bx = fig.add_subplot(122,projection='3d')
+   f1 = ax.plot_surface(x_data,y_data,z_data,cmap='viridis')
+   #f2 = bx.plot_surface(x_data,y_data,z_data,cmap='bwr')
+   ax.view_init(elev=25, azim=-30)
+   fig.suptitle(labels[0])
+   ax.set_title(labels[1]); ax.set_xlabel(labels[2])#; bx.set_title('Noise'); plt.show()
+   ax.set_ylabel(labels[3]); ax.set_zlabel(labels[4])
+   ax.tick_params(axis='both', which='major', labelsize=4)
+   #fig.savefig('franke-plot.png',dpi=300,bbox_inches='tight')
 
    return 0

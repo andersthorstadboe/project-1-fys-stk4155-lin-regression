@@ -1,9 +1,10 @@
 ### Imports
 import numpy as np
 import sklearn.linear_model as sk_lin
-#from sklearn.linear_model import Lasso
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.pipeline import make_pipeline
+from sklearn.utils import resample
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+#from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score,mean_squared_error
 from support_funcs import SVDcalc,poly_model_1d, poly_model_2d
@@ -118,13 +119,12 @@ def RegOLS(y_data: list,x_data: list,polydeg: int, scale=True, prnt=False):
         X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
 
     ## Scaling the training data by subtracting the mean
-    
-    y_tr_mean = np.mean(y_data[0],axis=0)
+    y_tr_mean = np.mean(y_data[0])#,axis=0)
     X_tr_mean = np.mean(X_train,axis=0)
     
     if scale == True:
-        y_tr_s = y_data[0] - y_tr_mean
-        X_tr_s = X_train - X_tr_mean
+        y_tr_s = (y_data[0] - y_tr_mean)#/np.std(y_data[0])#,axis=0)
+        X_tr_s = (X_train - X_tr_mean)#/np.std(X_train,axis=0)
     else: 
         y_tr_s = y_data[0]
         X_tr_s = X_train
@@ -134,7 +134,7 @@ def RegOLS(y_data: list,x_data: list,polydeg: int, scale=True, prnt=False):
     try:
         beta_ols = (np.linalg.inv(X_tr_s.T @ X_tr_s) @ X_tr_s.T @ y_tr_s)
     except np.linalg.LinAlgError:
-        print('LinAlgError, singular matrix in (X^T X)^{-1}, using SVD-method to calc β-values')
+        #print('LinAlgError, singular matrix in (X^T X)^{-1}, using SVD-method to calc β-values')
         beta_ols = SVDcalc(X_tr_s) @ y_tr_s
 
     # Calculating the intercept
@@ -172,12 +172,12 @@ def RegRidge(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float
         X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
 
     ## Scaling the training data by subtracting the mean
-    y_tr_mean = np.mean(y_data[0],axis=0)
+    y_tr_mean = np.mean(y_data[0])#,axis=0)
     X_tr_mean = np.mean(X_train,axis=0)
     
     if scale == True:
-        y_tr_s = y_data[0] - y_tr_mean
-        X_tr_s = X_train - X_tr_mean
+        y_tr_s = (y_data[0] - y_tr_mean)#/np.std(y_data[0])#,axis=0)
+        X_tr_s = (X_train - X_tr_mean)#/np.std(X_train,axis=0)
     else: 
         y_tr_s = y_data[0]
         X_tr_s = X_train
@@ -229,12 +229,20 @@ def RegLasso(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float
         X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
 
     ## Scaling the training data by subtracting the mean
-    y_tr_mean = np.mean(y_data[0],axis=0)
+    y_tr_mean = np.mean(y_data[0])#,axis=0)
     X_tr_mean = np.mean(X_train,axis=0)
     
     if scale == True:
-        y_tr_s = y_data[0] - y_tr_mean
-        X_tr_s = X_train - X_tr_mean
+        #scaler_y = StandardScaler(); scaler_X = StandardScaler()
+        #scaler_y.fit(y_data[0]); scaler_X.fit(X_train)
+        #y_tr_s = scaler_y.transform(y_data[0])
+        #print(np.std(y_data[0][:],axis=0))
+        y_tr_s = (y_data[0] - y_tr_mean)#/np.std(y_data[0])#,axis=0)
+ 
+        #X_tr_s = scaler_X.transform(X_train)
+        #print(X_train)
+        #print(np.std(X_train,axis=0))
+        X_tr_s = (X_train - X_tr_mean)#/np.std(X_train,axis=0)
     else: 
         y_tr_s = y_data[0]
         X_tr_s = X_train
@@ -246,7 +254,7 @@ def RegLasso(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float
     beta_store = []
 
     for i, lmb in enumerate(lmbda):
-        
+        #print('On iteration, %i, l = %.3f' %(i,lmb))
         # Importing and fitting Lasso model
         reg_lasso = sk_lin.Lasso(lmb,fit_intercept=False,max_iter=maxit)
         reg_lasso.fit(X_tr_s,y_tr_s)
@@ -254,7 +262,7 @@ def RegLasso(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float
         # Storing beta values for lambda
         #beta_lasso = reg_lasso.coef_
         beta_store.append(reg_lasso.coef_)
-        #intcept = reg_lasso.intercept_
+        intcepter = reg_lasso.intercept_
         #print(intcept)
         #print(reg_lasso.coef_)
         
@@ -263,11 +271,13 @@ def RegLasso(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float
         y_lasso_test  = reg_lasso.predict(X_test) + intcept
 
         # Storing MSE and R²-scores
-        MSE_lasso_train[i] = mse_own(y_data[0], y_lasso_train)
-        MSE_lasso_test[i] = mse_own(y_data[1], y_lasso_test)
+        #MSE_lasso_train[i] = 
+        #MSE_lasso_test[i] = 
+        MSE_lasso_train[i] = mean_squared_error(y_data[0], y_lasso_train) #mse_own(y_data[0], y_lasso_train)
+        MSE_lasso_test[i] = mean_squared_error(y_data[1], y_lasso_test)   #mse_own(y_data[1], y_lasso_test)
 
-        r2_lasso_train[i] = r2score(y_data[0], y_lasso_train)
-        r2_lasso_test[i] = r2score(y_data[1], y_lasso_test)
+        r2_lasso_train[i] = r2_score(y_data[0], y_lasso_train) #r2score(y_data[0], y_lasso_train)
+        r2_lasso_test[i] = r2_score(y_data[1], y_lasso_test)   #r2score(y_data[1], y_lasso_test)
     
     if prnt == True:
         print('\nError metrics, p =', polydeg)
@@ -277,6 +287,193 @@ def RegLasso(y_data: list,x_data: list,polydeg: int, lmbda: list, intcept: float
         print('Test    : ',r2_lasso_test)
 
     return y_lasso_train,y_lasso_test, intcept, beta_store, [MSE_lasso_train,MSE_lasso_test], [r2_lasso_train,r2_lasso_test]
+
+def RegOLS_boot(y_data: list, x_data: list, polydeg: int, n_boots: int, scale=True, prnt=False):
+    """
+    Performs a ordinary least square regression analysis based on input data, (x, y)\n
+    'The intercept column of X must be ommitted.\n'
+    Calculates β-values, intercept, and a prediction model, as well as the MSE and R²-metrics for the this model
+    """
+    ## Making design matrices for training and test data (checking if we are in a 1d- or 2d-case)
+    if len(x_data) > 2:
+        X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=polydeg)
+        X_test = poly_model_2d(x=x_data[1],y=x_data[3],poly_deg=polydeg)
+    else:
+        X_train = poly_model_1d(x=x_data[0],poly_deg=polydeg)
+        X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
+
+    ## Scaling the training data by subtracting the mean
+    y_tr_mean = np.mean(y_data[0])#,axis=0)
+    X_tr_mean = np.mean(X_train,axis=0)
+    
+    if scale == True:
+        y_tr_s = y_data[0] - y_tr_mean
+        X_tr_s = X_train - X_tr_mean
+    else: 
+        y_tr_s = y_data[0]
+        X_tr_s = X_train
+  
+    ## Optimization with bootstrapping
+    y_pred = np.empty((y_data[1].shape[0],n_boots))
+    for i in range(n_boots):
+
+        # Resampling training data
+        X_train_i, y_train_i = resample(X_tr_s,y_tr_s)
+
+        # Prediction
+        beta_i = SVDcalc(X_train_i) @ y_train_i
+
+        # Calculating the intercept
+        intcept_ols = np.mean(y_tr_mean - X_tr_mean @ beta_i)
+
+        # Predictions, including the intercept (on unscaled data)
+        y_pred[:,i] = X_test @ beta_i[:,0] + intcept_ols
+    
+
+    return y_pred, intcept_ols, beta_i
+
+def Reg_kfold(y_data: list, x_data: list, polydeg: np.ndarray, folds: int=2, lmbda: list=[], scale=True, maxit=1000):
+    """ 
+
+    
+    """
+    kfold = KFold(n_splits=folds)
+    scores_ols, scores_ridge, scores_lasso = {},{},{}
+    for i, p_d in enumerate(polydeg):
+
+
+        ## Making design matrices for training and test data (checking if we are in a 1d- or 2d-case)
+        if len(x_data) > 2:
+            X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=p_d)
+        else:
+            X_train = poly_model_1d(x=x_data[0],poly_deg=p_d)
+
+        scores_kfold_ols = np.zeros((len(lmbda),folds))
+        scores_kfold_ridge = np.zeros((len(lmbda),folds))
+        scores_kfold_lasso = np.zeros((len(lmbda),folds))
+
+        for j, lmb in enumerate(lmbda):
+
+            for k, (tr_idx, te_idx) in enumerate(kfold.split(x_data[0])):
+                X_tr_k, X_te_k = X_train[tr_idx], X_train[te_idx]
+                y_tr_k, y_te_k = y_data[0][tr_idx], y_data[0][te_idx]
+
+                ## Identity matrix for Ridge
+                id = np.eye(len(X_tr_k[0,:]),len(X_tr_k[0,:]))
+
+                ## Scaling the training data by subtracting the mean
+                y_tr_mean = np.mean(y_tr_k)#,axis=0)
+                X_tr_mean = np.mean(X_tr_k,axis=0)
+                if scale == True:
+                    y_tr_k = y_tr_k - y_tr_mean
+                    X_tr_k = X_tr_k - X_tr_mean
+
+                # OLS regression
+                beta_ols = SVDcalc(X_tr_k) @ y_tr_k
+                intcept_ols = np.mean(y_tr_mean - X_tr_mean @ beta_ols)
+                y_ols = X_te_k @ beta_ols[:,0] + intcept_ols
+
+                # Ridge regression
+                beta_ridge = (np.linalg.inv((X_tr_k.T @ X_tr_k) + lmb*id) @ X_tr_k.T @ y_tr_k)
+                y_ridge  = X_te_k @ beta_ridge + intcept_ols
+
+                # Lasso regression
+                reg_lasso = sk_lin.Lasso(lmb,fit_intercept=False,max_iter=maxit)
+                reg_lasso.fit(X_tr_k,y_tr_k)
+                y_lasso = reg_lasso.predict(X_te_k) + intcept_ols
+
+                scores_kfold_ols[j,k] = mean_squared_error(y_te_k,y_ols)#np.sum((y_ols - y_te_k)**2)/np.size(y_ols)
+                scores_kfold_ridge[j,k] = mean_squared_error(y_te_k,y_ridge)#np.sum((y_ridge - y_te_k)**2)/np.size(y_ridge)
+                scores_kfold_lasso[j,k] = mean_squared_error(y_te_k,y_lasso)#np.sum((y_lasso - y_te_k)**2)/np.size(y_lasso)
+                #end k for
+            #end j for
+        
+        scores_ols['p_'+str(p_d)] = np.mean(scores_kfold_ols,axis=1)
+        scores_ridge['p_'+str(p_d)] = np.mean(scores_kfold_ridge,axis=1)
+        scores_lasso['p_'+str(p_d)] = np.mean(scores_kfold_lasso,axis=1)
+        #end i for
+
+    return scores_ols,scores_ridge,scores_lasso
+
+def Reg_Kfold(y_data: list, x_data: list, polydeg: int, lmbda: list=[], scale=True, prnt=False, maxit=1000):
+    """
+    Performs a ordinary least square regression analysis based on input data, (x, y)\n
+    'The intercept column of X must be ommitted.\n'
+    Calculates β-values, intercept, and a prediction model, as well as the MSE and R²-metrics for the this model
+    """
+    ## Making design matrices for training and test data (checking if we are in a 1d- or 2d-case)
+    if len(x_data) > 2:
+        X_train = poly_model_2d(x=x_data[0],y=x_data[2],poly_deg=polydeg)
+        X_test = poly_model_2d(x=x_data[1],y=x_data[3],poly_deg=polydeg)
+    else:
+        X_train = poly_model_1d(x=x_data[0],poly_deg=polydeg)
+        X_test = poly_model_1d(x=x_data[1],poly_deg=polydeg)
+
+    ## Scaling the training data by subtracting the mean
+    y_tr_mean = np.mean(y_data[0])#,axis=0)
+    X_tr_mean = np.mean(X_train,axis=0)
+    
+    if scale == True:
+        y_tr_s = y_data[0] - y_tr_mean
+        X_tr_s = X_train - X_tr_mean
+    else: 
+        y_tr_s = y_data[0]
+        X_tr_s = X_train
+
+    id = np.eye(len(X_tr_s[0,:]),len(X_tr_s[0,:]))
+    score_ols, score_ridge, score_lasso = np.zeros(len(lmbda)),np.zeros(len(lmbda)),np.zeros(len(lmbda))
+    for i, lmb in enumerate(lmbda):
+
+        # OLS regression
+        beta_ols = SVDcalc(X_tr_s) @ y_tr_s
+        intcept_ols = np.mean(y_tr_mean - X_tr_mean @ beta_ols)
+        y_ols = X_test @ beta_ols[:,0] + intcept_ols
+
+        # Ridge regression
+        beta_ridge = (np.linalg.inv((X_tr_s.T @ X_tr_s) + lmb*id) @ X_tr_s.T @ y_tr_s)
+        y_ridge  = X_test @ beta_ridge + intcept_ols
+
+        # Lasso regression
+        reg_lasso = sk_lin.Lasso(lmb,fit_intercept=False,max_iter=maxit)
+        reg_lasso.fit(X_tr_s,y_tr_s)
+        y_lasso = reg_lasso.predict(X_test) + intcept_ols
+
+        score_ols[i] = (mean_squared_error(y_data[1],y_ols))
+        score_ridge[i] = (mean_squared_error(y_data[1],y_ridge))
+        score_lasso[i] = (mean_squared_error(y_data[1],y_lasso))
+
+    return score_ols, score_ridge, score_lasso
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def RegLasso1(y_data, X, lmbda, intcept, maxit=1000, split=0.0, scaling=True, prnt=False):
     """
@@ -380,6 +577,9 @@ def RegLasso1(y_data, X, lmbda, intcept, maxit=1000, split=0.0, scaling=True, pr
         #    print('R² (Own):\nTraining: %g | Test: %g' %(r2s_ols[0],r2s_ols[1]))
 
     return y_lasso_train,y_lasso_test, intcept, beta_store, [MSE_lasso_train,MSE_lasso_test], [r2_lasso_train,r2_lasso_test]
+
+
+
 
 
 
