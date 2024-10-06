@@ -6,53 +6,62 @@ from support_funcs import *
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from imageio.v3 import imread
 from sklearn.model_selection import train_test_split
 
 #Default for plots
 plt.rcParams["figure.figsize"] = (5,4) #(15,7)
 plt.rcParams["font.size"] = 10
 
-# Random seed
-np.random.seed(2018)
+scaler = None #'minmax'  #None                                                # Sets scaling for all regression
 
-# Case selection (Test function, z)
-case_s = ['1d', '2d', 'Franke']
-case = case_s[2]
-scaler = None #'minmax'
-shw = 'n'; plotting = 'y'
+## Import parameters
+f_folder = '01-data/'
+f_name = ['Etnedal','Jotunheimen']
+f_path = [f_folder+f_name[0]+'.tif',f_folder+f_name[1]+'.tif']
+n = 1                                                           # Initial downsampling of .tif-data
 
-# Grid and data setup
-a, b   = 1.0, 1.5                                           # Coefficients for exponential model
-c0, c1 = 0.01, 0.95                                         # Noise scaling    
-x0, xN = 0, 1                                               # Start and end of domain, x-axis
-y0, yN = 0, 1                                               # Start and end of domain, y-axis
-Nx, Ny = 15, 15                                             # Number of sample points
+# Plotting .tif-datasets, 
+shw = 'n'
+fig,ax = plt.subplots(1,len(f_path))
+fig.suptitle('Terrain datasets')
+z_data = []
+for i, bx in enumerate(ax):
+    z_data.append(imread(f_path[i])[::n,::n])
+    bx.imshow(z_data[i])
+    bx.set_title(f_name[i])
 
-x   = np.sort(np.random.uniform(x0,xN,Nx)).reshape(-1,1)    # Mesh points on x-axis (uniformly distributed, sorted values)
-y   = np.sort(np.random.uniform(y0,yN,Ny)).reshape(-1,1)    # Mesh points on y-axis (uniformly distributed, sorted values) (try different length arrays in x and y if singular values are an issue)
-x_n = np.random.normal(0, c0, x.shape)                      # Noise for x-axis
-y_n = np.random.normal(0, c0, y.shape)                      # Noise for y-axis
+print('Original shape, z: ',z_data[0].shape)
+n = int(input('Scale down dataset '))
+# Downsampling, new downsamplig parameter, n
+z = [z_data[0][::n,::n],z_data[1][::n,::n]]
+Nx,Ny = len(z[0]),len(z[0][1])
+x = np.linspace(0,Nx,Nx)
+y = np.linspace(0,Ny,Ny)
+print('Shape, x: ',x.shape)
+print('Shape, y: ',y.shape)
+print('Shape, z0: ',z[0].shape)
+print('Shape, z1: ',z[1].shape)
+xx,yy = np.meshgrid(x,y,indexing='ij')
 
-# Test function selection
-if case == '1d':
-    z = exp1D(x,x_n,a=a,b=b,noise=c1)
-    if shw == 'y':
-        fig,ax = plt.subplots(1,1)
-        ax.scatter(x,z)
-        ax.set_title('Test function'); ax.set_xlabel('x'); ax.set_ylabel('y',rotation=0,labelpad=15)
-elif case == '2d':
-    xx, yy = np.meshgrid(x,y)
-    z = exp2D(xx,yy,x_n,y_n,a=a,b=b,noise=c1)
-    if shw == 'y':
-        plot2D(xx,yy,z,labels=['Test function','','X','Y','Z'])
-elif case == 'Franke':
-    xx, yy = np.meshgrid(x,y)
-    z = Franke(xx,yy,x_n,y_n,noise=c1)
-    if shw == 'y':
-        plot2D(xx,yy,z,labels=['','','X','Y','Z'])
+## Choosing with dataset to go forward with
+print('Number of images in z_data-list: %i' %(len(z_data)))
+case = int(input('Choose image, input an image number, starting at 1: '))
+try:
+    z = z[case-1]
+except IndexError:
+    print('Image number out-of-range, try again')
+    print('Number of images in z_data-list: %i' %(len(z_data)))
+    case = int(input('New image number: '))
+    z = z[case-1]
+
+# Surface plot of dataset
+plot2D(xx,yy,z,labels=[f_name[case-1],'X','Y','m.a.s'])
+if shw == 'y':
+    plt.show()
 
 ## Polynomial degree setup
-maxdegree   = 5
+maxdegree   = 10
 poly_deg    = np.arange(1,maxdegree+1,1)
 
 ## Training and test data ratio
@@ -62,13 +71,9 @@ train_l     = int(np.round(len(x)*train_split))
 test_l      = int(np.round(len(x)*test_split))
 
 # Dataset splitting
-if case == '1d':
-    x_train,x_test,z_train,z_test = train_test_split(x,z,test_size=test_split)
-    x_data = [x_train,x_test]; z_data = [z_train,z_test]
-else:
-    xf = xx.reshape(-1,1); yf = yy.reshape(-1,1); zf = z.reshape(-1,1)
-    x_train,x_test,y_train,y_test,z_train,z_test = train_test_split(xf,yf,zf,test_size=test_split)
-    x_data = [x_train,x_test,y_train,y_test]; z_data = [z_train,z_test]
+xf = xx.reshape(-1,1); yf = yy.reshape(-1,1); zf = z.reshape(-1,1)
+x_train,x_test,y_train,y_test,z_train,z_test = train_test_split(xf,yf,zf,test_size=test_split)
+x_data = [x_train,x_test,y_train,y_test]; z_data = [z_train,z_test]
 
 ## Dictionaries for storing values from regression analysis
 mod_train, mod_test = {},{}
@@ -89,8 +94,8 @@ beta_0 = np.zeros(maxdegree)
 # OLS loop
 for i, p_d in enumerate(poly_deg):
 
-    y_train_tmp,z_test_tmp,intcept_tmp,beta_tmp,mse_s_tmp,r2_s_tmp = RegOLS(y_data=z_data,x_data=x_data,
-                                                                            polydeg=p_d,scale=scaler)
+    y_train_tmp,z_test_tmp,intcept_tmp,beta_tmp,mse_s_tmp,r2_s_tmp = RegOLS(y_data=z_data,x_data=x_data,polydeg=p_d,scale=scaler)
+
     mod_tr_ols['train_p_'+str(p_d)] = y_train_tmp; mod_ts_ols['test_p_'+str(p_d)] = z_test_tmp
     itcpt_ols['p_'+str(p_d)] = intcept_tmp; btas_ols['p_'+str(p_d)] = beta_tmp
     mse_tr_ols['p_'+str(p_d)] = mse_s_tmp[0]; mse_te_ols['p_'+str(p_d)] = mse_s_tmp[1]; 
@@ -103,7 +108,7 @@ mod_train['y_tr_ols'] = mod_tr_ols; mod_test['y_ts_ols'] = mod_ts_ols;
 intcept['intercept_ols'] = itcpt_ols; betas['betas_ols'] = btas_ols
 mse_tr_s['mse_ols'] = mse_tr_ols; mse_te_s['mse_ols'] = mse_te_ols; 
 r2_tr_s['r2_ols'] = r2_tr_ols; r2_te_s['r2_ols'] = r2_te_ols
-
+#'''
 ## ---------- Ridge-regression ---------- ##
 n_lmbda = 6
 l_min,l_max = -10,10
@@ -139,7 +144,7 @@ mse_tr_lasso,mse_te_lasso = {},{}
 r2_tr_lasso,r2_te_lasso   = {},{}
 
 #Lasso loop
-maxiter = 20000
+maxiter = 2000
 for i, p_d in enumerate(poly_deg):
 
     y_train_tmp,z_test_tmp,intcept_tmp,beta_tmp,mse_s_tmp,r2_s_tmp = RegLasso(y_data=z_data,x_data=x_data, polydeg=p_d,
@@ -163,7 +168,8 @@ beta = []
 n_boots = 1000
 
 for i,p_d in enumerate(poly_deg):
-    print('p =',p_d)
+    print('bootstrap')
+    print('p = ',p_d)
     
     z_test_tmp,intcept_tmp,beta_tmp = RegOLS_boot(y_data=z_data, x_data=x_data, polydeg=p_d, n_boots=n_boots,scale=scaler)
 
@@ -174,7 +180,7 @@ for i,p_d in enumerate(poly_deg):
 
 ## ---------- K-fold cross validation ---------- ##
 from sklearn.model_selection import KFold
-folds = 5; kfold = KFold(n_splits=folds)
+folds = 8; kfold = KFold(n_splits=folds)
 
 # Restating lambda in same range, with more values to get a smoother line
 N_lmbda = n_lmbda*5
@@ -222,9 +228,9 @@ if plotting == 'y':
     r2_ridge['r2_tr_ridge'] = r2_tr_ridge; r2_ridge['r2_te_ridge'] = r2_te_ridge; 
     r2_lasso['r2_tr_lasso'] = r2_tr_lasso; r2_lasso['r2_te_lasso'] = r2_te_lasso; 
     
-    plot_heatmap(x_data=poly_deg,y_data=lmbda,values=mse_lasso,labels=['Lasso','MSE','poly.deg','λ','Training','Test'])#,clrmap=clrmap[])
+    plot_heatmap(x_data=poly_deg,y_data=lmbda,values=mse_lasso,labels=['Lasso','MSE','poly.deg','λ','Test','Test'])#,clrmap=clrmap[])
     plot_heatmap(x_data=poly_deg,y_data=lmbda,values=r2_lasso,labels=['Lasso','R²','poly.deg','λ','Training','Test'])#,clrmap=clrmap[2])
-    plot_heatmap(x_data=poly_deg,y_data=lmbda,values=mse_ridge,labels=['Ridge','MSE','poly.deg','λ','Training','Test'])#,clrmap=clrmap[4])
+    plot_heatmap(x_data=poly_deg,y_data=lmbda,values=mse_ridge,labels=['Ridge','MSE','poly.deg','λ','Test','Test'])#,clrmap=clrmap[4])
     plot_heatmap(x_data=poly_deg,y_data=lmbda,values=r2_ridge,labels=['Ridge','R²','poly.deg','λ','Training','Test'])#,clrmap=clrmap[4])
     
     ## Line plot of OLS results
@@ -233,7 +239,6 @@ if plotting == 'y':
 
     ## Plotting beta-values for OLS
     beta_plot(poly_deg,betas['betas_ols'],labels=[r'$\hat{\beta}_{\text{OLS}}$',r'$\beta_{i}$',r'$\hat{\beta}$'])
-    beta_plot(poly_deg,betas['betas_ridge']['p_5'],labels=[r'$\hat{\beta}_{\text{OLS}}$',r'$\beta_{i}$',r'$\hat{\beta}$'])
 
     ## Plotting final result from bootstrapping vs. polynomial degree
     fig,bx = plt.subplots(1,1)
@@ -264,23 +269,17 @@ if plotting == 'y':
         sc_lasso[i] = scores_lasso[i][::nn]
 
     # K-fold scores for Ridge and Lasso
-    fig0,ax = plt.subplots(1,1)
-    fig1,bx = plt.subplots(1,1)
+    fig,ax = plt.subplots(2,1)
     for i in list(scores_ridge):
-        ax.plot(np.log10(Lmbda),scores_ridge[i],label=i)
-        bx.plot(np.log10(Lmbda),scores_lasso[i],label=i)
+        ax[0].plot(np.log10(Lmbda),scores_ridge[i],label=i)
+        ax[1].plot(np.log10(Lmbda),scores_lasso[i],label=i)
         #ax[2].plot(np.log10(lmbda),scores_ols[i],label=i)
-    ax.set_xlabel(r'log$_{10}$(λ)'); ax.set_ylabel('MSE',rotation=0,labelpad=15)
-    ax.set_ylabel('MSE',rotation=0,labelpad=15)
-    bx.set_xlabel(r'log$_{10}$(λ)'); bx.set_ylabel('MSE',rotation=0,labelpad=15)
-    bx.set_ylabel('MSE',rotation=0,labelpad=15)
-    ax.legend(); ax.grid()
-    bx.legend(); bx.grid()
-    ax.set_title('Ridge-case'); bx.set_title('Lasso-case'); 
-    fig0.suptitle('Kfold-scores, k = %i' %(folds),y=.98,x=.5225)
-    fig0.tight_layout()
-    fig1.suptitle('Kfold-scores, k = %i' %(folds),y=.98,x=.5225)
-    fig1.tight_layout()
+    ax[1].set_xlabel(r'log$_{10}$(λ)'); ax[1].set_ylabel('MSE',rotation=0,labelpad=15)
+    ax[0].set_ylabel('MSE',rotation=0,labelpad=15)
+    ax[0].legend(); ax[1].legend(); ax[0].grid(),ax[1].grid()
+    ax[0].set_title('Ridge-case'); ax[1].set_title('Lasso-case'); 
+    fig.suptitle('Kfold-scores, k = %i' %(folds),y=.98,x=.5225)
+    fig.tight_layout()
 
     # Heatmap-plots, K-fold
     heat_ridge_mse,heat_lasso_mse = {},{}
@@ -292,119 +291,71 @@ if plotting == 'y':
 
     plt.show()
 
-## Fit with optimal parameters, OLS, 1D-case
-if case == '1d':
-    # OLS-fit
-    idx_o_poly = np.argmin(err_b)
-    p_ols = idx_o_poly+1; 
-    X_ols = poly_model_1d(x=x,poly_deg=p_ols)
-    b_ols = beta[p_ols-1]                                           # Picking b from bootstrapping results
-    intcepter = np.mean(np.mean(z) - np.mean(X_ols,axis=0) @ b_ols) # Calc of intercept to scale back fit to correct starting value, used on all three
-    y_pred_ols = X_ols @ b_ols + intcepter
+## Fit with optimal parameters
+# OLS-fit
+idx_o_poly = np.argmin(err_b)
+p_ols = idx_o_poly+1; 
+X_ols = poly_model_2d(x=xf,y=yf,poly_deg=p_ols)
+b_ols = beta[p_ols-1]                                           # Picking b from bootstrapping results
+intcepter = np.mean(np.mean(z) - np.mean(X_ols,axis=0) @ b_ols) 
+y_pred_ols = X_ols @ b_ols + intcepter
 
-    # Ridge-fit
-    idx_r_poly = np.argmin(mse_min_ridge)
-    p_ridge = idx_r_poly+1; p_r = 'p_'+str(p_ridge)
-    lmb_r = Lmbda[idx_min_r[idx_r_poly]]
-    idx_r_lmb = np.where(lmbda == lmb_r)[0]
-    print(idx_r_lmb)
-    print(idx_r_lmb.size)
-    if idx_r_lmb.size == 0:
-        idx_r_lmb = np.abs(lmbda - lmb_r).argmin()
-    else:
-        idx_r_lmb = idx_r_lmb[0]
-    print(idx_r_lmb)
-    X_ridge = poly_model_1d(x=x,poly_deg=idx_r_poly+1)
-    b_ridge = betas['betas_ridge'][p_r][idx_r_lmb]
-    intcepter = np.mean(np.mean(z) - np.mean(X_ridge,axis=0) @ b_ridge)
-    y_pred_ridge = X_ridge @ b_ridge + intcepter
+# Ridge-fit
+idx_r_poly = np.argmin(mse_min_ridge)
+p_ridge = idx_r_poly+1; p_r = 'p_'+str(p_ridge)
+lmb_r = Lmbda[idx_min_r[idx_r_poly]]
+idx_r_lmb = np.where(lmbda == lmb_r)[0]
+print(idx_r_lmb)
+print(idx_r_lmb.size)
+if idx_r_lmb.size == 0:
+    idx_r_lmb = np.abs(lmbda - lmb_r).argmin()
+else:
+    idx_r_lmb = idx_r_lmb[0]
+print(idx_r_lmb)
+X_ridge = poly_model_2d(x=xf,y=yf,poly_deg=p_ridge)
+b_ridge = betas['betas_ridge'][p_r][idx_r_lmb]
+intcepter = np.mean(np.mean(z) - np.mean(X_ridge,axis=0) @ b_ridge)
+y_pred_ridge = X_ridge @ b_ridge + intcepter
 
-    # Lasso-fit
-    idx_l_poly = np.argmin(mse_min_lasso)
-    p_lasso = idx_l_poly+1; p_l = 'p_'+str(p_lasso)
-    lmb_l = Lmbda[idx_min_l[idx_l_poly]]
-    idx_l_lmb = np.where(lmbda == lmb_l)[0]
-    print(idx_l_lmb)
-    print(idx_l_lmb.size)
-    if idx_l_lmb.size == 0:
-        idx_l_lmb = np.abs(lmbda - lmb_l).argmin()
-    else:
-        idx_l_lmb = idx_l_lmb[0]
-    print(idx_l_lmb)
-    X_lasso = poly_model_1d(x=x,poly_deg=idx_l_poly+1)
-    b_lasso = betas['betas_lasso'][p_l][idx_l_lmb]
-    intcepter = np.mean(np.mean(z) - np.mean(X_lasso,axis=0) @ b_lasso)
-    y_pred_lasso = X_lasso @ b_lasso + intcepter 
-    
-    # Plotting regression models against dataset, 1D
-    fig,ax = plt.subplots(1,1)
-    ax.scatter(x,z,alpha=0.5)
-    ax.plot(x,y_pred_ols,'C1',label='OLS')
-    ax.plot(x,y_pred_ridge,'C2',label='Ridge')
-    ax.plot(x,y_pred_lasso,'--C3',label='Lasso')
-    ax.legend(); ax.grid()
-    plt.show()
-    
-else: # Used if dataset is 2D
-    # OLS-fit
-    idx_o_poly = np.argmin(err_b)
-    p_ols = idx_o_poly+1; 
-    X_ols = poly_model_2d(x=xf,y=yf,poly_deg=p_ols)
-    b_ols = beta[p_ols-1]                                           # Picking b from bootstrapping results
-    intcepter = np.mean(np.mean(z) - np.mean(X_ols,axis=0) @ b_ols) 
-    y_pred_ols = X_ols @ b_ols + intcepter
+# Lasso-fit
+idx_l_poly = np.argmin(mse_min_lasso)
+p_lasso = idx_l_poly+1; 
+p_l = 'p_'+str(p_lasso)
+lmb_l = Lmbda[idx_min_l[idx_l_poly]]
+idx_l_lmb = np.where(lmbda == lmb_l)[0]
+print(idx_l_lmb)
+print(idx_l_lmb.size)
+if idx_l_lmb.size == 0:
+    idx_l_lmb = np.abs(lmbda - lmb_l).argmin()
+else:
+    idx_l_lmb = idx_l_lmb[0]
+print(idx_l_lmb)
+X_lasso = poly_model_2d(x=xf,y=yf,poly_deg=p_lasso)
+b_lasso = betas['betas_lasso'][p_l][idx_l_lmb]
+intcepter = np.mean(np.mean(z) - np.mean(X_lasso,axis=0) @ b_lasso)
+y_pred_lasso = X_lasso @ b_lasso + intcepter 
 
-    # Ridge-fit
-    idx_r_poly = np.argmin(mse_min_ridge)
-    p_ridge = idx_r_poly+1; p_r = 'p_'+str(p_ridge)
-    lmb_r = Lmbda[idx_min_r[idx_r_poly]]
-    idx_r_lmb = np.where(lmbda == lmb_r)[0]
-    print(idx_r_lmb)
-    print(idx_r_lmb.size)
-    if idx_r_lmb.size == 0:
-        idx_r_lmb = np.abs(lmbda - lmb_r).argmin()
-    else:
-        idx_r_lmb = idx_r_lmb[0]
-    print(idx_r_lmb)
-    X_ridge = poly_model_2d(x=xf,y=yf,poly_deg=p_ridge)
-    b_ridge = betas['betas_ridge'][p_r][idx_r_lmb]
-    intcepter = np.mean(np.mean(z) - np.mean(X_ridge,axis=0) @ b_ridge)
-    y_pred_ridge = X_ridge @ b_ridge + intcepter
+y_pred_ols = y_pred_ols.reshape(Nx,Ny)
+y_pred_ridge = y_pred_ridge.reshape(Nx,Ny)
+y_pred_lasso = y_pred_lasso.reshape(Nx,Ny)
 
-    # Lasso-fit
-    idx_l_poly = np.argmin(mse_min_lasso)
-    p_lasso = idx_l_poly+1; p_l = 'p_'+str(p_lasso)
-    lmb_l = Lmbda[idx_min_l[idx_l_poly]]
-    idx_l_lmb = np.where(lmbda == lmb_l)[0]
-    print(idx_l_lmb)
-    print(idx_l_lmb.size)
-    if idx_l_lmb.size == 0:
-        idx_l_lmb = np.abs(lmbda - lmb_l).argmin()
-    else:
-        idx_l_lmb = idx_l_lmb[0]
-    print(idx_l_lmb)
-    X_lasso = poly_model_2d(x=xf,y=yf,poly_deg=p_lasso)
-    b_lasso = betas['betas_lasso'][p_l][idx_l_lmb]
-    intcepter = np.mean(np.mean(z) - np.mean(X_lasso,axis=0) @ b_lasso)
-    y_pred_lasso = X_lasso @ b_lasso + intcepter  
+print('MSE, OLS  : ',err_b)
+print('MSE, Ridge: ',mse_min_ridge)
+print('MSE, Lasso: ',mse_min_lasso)
 
-    y_pred_ols = y_pred_ols.reshape(Nx,Ny)
-    y_pred_ridge = y_pred_ridge.reshape(Nx,Ny)
-    y_pred_lasso = y_pred_lasso.reshape(Nx,Ny)
-    
-    plot2D(xx,yy,y_pred_ols,labels=['OLS-prediction','X','Y','Z'])
-    plot2D(xx,yy,y_pred_ridge,labels=['Ridge-prediction','X','Y','Z'])
-    plot2D(xx,yy,y_pred_lasso,labels=['Lasso-prediction','X','Y','Z'])
+plot2D(xx,yy,y_pred_ols,labels=['OLS-prediction','X','Y','Z'])
+plot2D(xx,yy,y_pred_ridge,labels=['Ridge-prediction','X','Y','Z'])
+plot2D(xx,yy,y_pred_lasso,labels=['Lasso-prediction','X','Y','Z'])
+plot2D(xx,yy,z,labels=['','X','Y','Z'])#,save=True,f_name=f_name[0]+'_topo.png')
 
-    fig,ax = plt.subplots(1,1)
-    ax.plot(poly_deg,err_b,label='ols')
-    ax.plot(poly_deg,mse_min_lasso,label='lasso')
-    ax.plot(poly_deg,mse_min_ridge,'--',label='ridge')
-    ax.set_xlabel('poly_deg'); ax.set_ylabel('MSE')
-    ax.set_title('Resulting MSE-values vs. model complexity')
-    ax.legend(); ax.grid()
 
-    plt.show()
+fig,ax = plt.subplots(1,1)
+ax.plot(poly_deg,err_b,label='ols')
+ax.plot(poly_deg,mse_min_lasso,label='lasso')
+ax.plot(poly_deg,mse_min_ridge,'--',label='ridge')
+ax.legend()
+
+plt.show()
 
 ## Printing values to terminal:
 print()
@@ -420,3 +371,4 @@ print('Chosen polynomial degrees')
 print('OLS   = ',p_ols,' | Ridge = ',p_ridge, ' | Lasso = ',p_lasso)
 print('Chosen lambdas')
 print('Ridge = ',lmb_r, ' | Lasso = ',lmb_l)
+

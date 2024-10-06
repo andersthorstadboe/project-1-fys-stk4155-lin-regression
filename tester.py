@@ -1,92 +1,119 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.model_selection import KFold
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import PolynomialFeatures
+from support_funcs import *
+from reg_functions import dataScaler
+from imageio.v3 import imread
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, PowerTransformer, MaxAbsScaler
 
-# A seed just to ensure that the random numbers are the same for every run.
-# Useful for eventual debugging.
-np.random.seed(3155)
+#print(plt.rcParams.keys)
+#'''
 
-# Generate the data.
-nsamples = 100
-x = np.random.randn(nsamples)
-y = 3*x**2 + np.random.randn(nsamples)
+# Grid and data setup
+a, b   = 1.0, 1.5                                           # Coefficients for exponential model
+c0, c1 = 0.01, 0.95                                         # Noise scaling    
+x0, xN = 0, 1                                               # Start and end of domain, x-axis
+y0, yN = 0, 0.95                                            # Start and end of domain, y-axis
+Nx, Ny = 5, 5                                             # Number of sample points
+np.random.seed(2018)
+x   = np.sort(np.random.uniform(x0,xN,Nx)).reshape(-1,1)    # Mesh points on x-axis (uniformly distributed, sorted values)
+y   = np.sort(np.random.uniform(y0,yN,Ny)).reshape(-1,1)    # Mesh points on y-axis (uniformly distributed, sorted values) (try different length arrays in x and y if singular values are an issue)
+x_n = np.random.normal(0, c0, x.shape)                      # Noise for x-axis
+y_n = np.random.normal(0, c0, y.shape)                      # Noise for y-axis
+'''
+a, b   = 1.0, 1.5                                           # Coefficients for exponential model
+c0, c1 = 0.01, 0.95                                         # Noise scaling    
+x0, xN = 0, 1                                               # Start and end of domain, x-axis
+y0, yN = 0, 0.95                                            # Start and end of domain, y-axis
+Nx, Ny = 50, 50                                             # Number of sample points
 
-## Cross-validation on Ridge regression using KFold only
+x   = np.sort(np.random.uniform(x0,xN,Nx)).reshape(-1,1)    # Mesh points on x-axis (uniformly distributed, sorted values)
+y   = np.sort(np.random.uniform(y0,yN,Ny)).reshape(-1,1)    # Mesh points on y-axis (uniformly distributed, sorted values) (try different length arrays in x and y if singular values are an issue)
+x_n = np.random.normal(0, c0, x.shape)                      # Noise for x-axis
+y_n = np.random.normal(0, c0, y.shape)                      # Noise for y-axis
+xx,yy = np.meshgrid(x,y,indexing='ij')
+z = Franke(xx,yy,x_n,y_n,0.0)
 
-# Decide degree on polynomial to fit
-poly = PolynomialFeatures(degree = 6)
+print(xx.shape)
+'''
 
-# Decide which values of lambda to use
-nlambdas = 100
-lambdas = np.logspace(-3, 5, nlambdas)
+# Test function selection
+f_folder = '01-data/'
+f_name = ['Etnedal','Jotunheimen']
+f_path = [f_folder+f_name[0]+'.tif',f_folder+f_name[1]+'.tif']
+n = 85
+z = imread(f_path[0])[::n,::n]
 
-# Initialize a KFold instance
-k = 5
-kfold = KFold(n_splits = k)
-
-# Perform the cross-validation to estimate MSE
-scores_KFold = np.zeros((nlambdas, k))
-
-i = 0
-for lmb in lambdas:
-    ridge = Ridge(alpha = lmb)
-    j = 0
-    for train_inds, test_inds in kfold.split(x):
-        xtrain = x[train_inds]
-        ytrain = y[train_inds]
-
-        xtest = x[test_inds]
-        ytest = y[test_inds]
-
-        Xtrain = poly.fit_transform(xtrain[:, np.newaxis])
-        ridge.fit(Xtrain, ytrain[:, np.newaxis])
-
-        Xtest = poly.fit_transform(xtest[:, np.newaxis])
-        ypred = ridge.predict(Xtest)
-        print(ypred.shape)
-        print(np.sum((ypred - ytest[:, np.newaxis])**2)/np.size(ypred))
-        scores_KFold[i,j] = np.sum((ypred - ytest[:, np.newaxis])**2)/np.size(ypred)
-        print(scores_KFold)
-
-        j += 1
-    i += 1
+Nx,Ny = len(z),len(z[0])
+print(Nx,Ny)
+x = np.linspace(0,Nx,Nx)
+y = np.linspace(0,Ny,Ny)
+xx,yy = np.meshgrid(x,y,indexing='ij')
 
 
-estimated_mse_KFold = np.mean(scores_KFold, axis = 1)
-print(estimated_mse_KFold)
+xf,yf,zf = xx.reshape(-1,1), yy.reshape(-1,1),z.reshape(-1,1)
+X = poly_model_2d(xf,yf,2)
 
-## Cross-validation using cross_val_score from sklearn along with KFold
+scale = 'minmax'
+std = StandardScaler()
+Xs = dataScaler(X,scale,range=(1,2))
+std.fit(X)
+Xstd = std.transform(X)
+zs = dataScaler(zf,scale,range=(1,2))
+std_z = MaxAbsScaler()
+std_z.fit(zf)
+zstd = std_z.transform(zf)
+print(std.mean_)
+print(np.min(Xs))
+print(np.max(Xs))
+print(np.min(zs))
+print(np.max(zs))
 
-# kfold is an instance initialized above as:
-# kfold = KFold(n_splits = k)
+#XX = Xs.reshape(Nx,Ny)
+zz = zs.reshape(Nx,Ny)
+zzstd = zstd.reshape(Nx,Ny)
 
-estimated_mse_sklearn = np.zeros(nlambdas)
-i = 0
-for lmb in lambdas:
-    ridge = Ridge(alpha = lmb)
+#fig,ax = plt.subplots(2,1)
+#ax[0].plot()
 
-    X = poly.fit_transform(x[:, np.newaxis])
-    estimated_mse_folds = cross_val_score(ridge, X, y[:, np.newaxis], scoring='neg_mean_squared_error', cv=kfold)
-
-    # cross_val_score return an array containing the estimated negative mse for every fold.
-    # we have to the the mean of every array in order to get an estimate of the mse of the model
-    estimated_mse_sklearn[i] = np.mean(-estimated_mse_folds)
-
-    i += 1
-
-## Plot and compare the slightly different ways to perform cross-validation
-
-plt.figure()
-
-plt.plot(np.log10(lambdas), estimated_mse_sklearn, label = 'cross_val_score')
-plt.plot(np.log10(lambdas), estimated_mse_KFold, 'r--', label = 'KFold')
-
-plt.xlabel('log10(lambda)')
-plt.ylabel('mse')
-
-plt.legend()
+plot2D(xx,yy,z)
+plot2D(xx,yy,zz)
+plot2D(xx,yy,zzstd)
 
 plt.show()
+
+
+'''
+'''
+print(Xstd[:10,:5])
+print(Xs[:10,:5])
+print(Xstd[:10,:5] - Xs[:10,:5])
+scaler_STD_X = StandardScaler()
+scaler_STD_z = StandardScaler()
+scaler_minmax = MinMaxScaler()
+sc_mmz = MinMaxScaler()
+sc_rob = RobustScaler()
+sc_robz = RobustScaler()
+sc_pow = PowerTransformer()
+sc_powz = PowerTransformer()
+
+Xs = scaler_STD_X.fit(X)
+zs = scaler_STD_z.fit(z)
+scaler_minmax.fit(X)
+sc_mmz.fit(z)
+sc_rob.fit(X)
+sc_robz.fit(z)
+sc_pow.fit(X)
+sc_powz.fit(z)
+
+zz = zf.reshape(Nx,Ny)
+XX = Xs.reshape(Nx,Ny)
+
+print(scaler_STD_X.transform(X)[:,0])
+print(scaler_minmax.transform(X)[:,0])
+print(sc_rob.transform(X)[:,0])
+print(sc_pow.transform(X)[:,0])
+print()
+print(scaler_STD_z.transform(z)[:,0])
+print(sc_mmz.transform(z)[:,0])
+print(sc_robz.transform(z)[:,0])
+print(sc_powz.transform(z)[:,0])
+#'''

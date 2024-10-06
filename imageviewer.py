@@ -45,7 +45,7 @@ fig,ax = plt.subplots(1,2)
 fig.suptitle('Terrains')
 j = 0
 z_data = []
-n = 20
+n = 13
 for i, bx in enumerate(ax):
     
     z_data.append(imread(f_path[i])[::n,::n])#,imread(f_name[j+1])]
@@ -69,7 +69,7 @@ print('Shape, z0: ',z[0].shape)
 print('Shape, z0: ',z[1].shape)
 xx,yy = np.meshgrid(x,y,indexing='ij')
 
-plot2D(xx,yy,z[0],labels=['',f_name[0],'','',''])
-plot2D(xx,yy,z[1],labels=['',f_name[1],'','',''])
+plot2D(xx,yy,z[0],labels=['','X','Y','Z'],save=True,f_name=f_name[0]+'_topo.png')
+plot2D(xx,yy,z[1],labels=['','X','Y','Z'],save=True,f_name=f_name[1]+'_topo.png')
 plt.show()
 
