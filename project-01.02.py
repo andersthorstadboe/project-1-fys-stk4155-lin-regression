@@ -6,10 +6,10 @@ from support_funcs import *
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 
 #Default for plots
-plt.rcParams["figure.figsize"] = (5,4) #(15,7)
+plt.rcParams["figure.figsize"] = (5,4)
 plt.rcParams["font.size"] = 10
 
 # Random seed
@@ -51,9 +51,20 @@ elif case == 'Franke':
     if shw == 'y':
         plot2D(xx,yy,z,labels=['','','X','Y','Z'])
 
-## Polynomial degree setup
-maxdegree   = 5
+## Parameter setup
+maxdegree   = 10
 poly_deg    = np.arange(1,maxdegree+1,1)
+
+n_lmbda = 6
+l_min,l_max = -10,10
+lmbda = np.logspace(l_min,l_max,n_lmbda)
+
+## Resampling setup
+n_boots = 1000
+folds = 8; kfold = KFold(n_splits=folds)
+# Restating lambda in same range, with more values to get a smoother line
+N_lmbda = n_lmbda*5
+Lmbda = np.logspace(l_min,l_max,N_lmbda)
 
 ## Training and test data ratio
 train_split = 4/5
@@ -105,9 +116,6 @@ mse_tr_s['mse_ols'] = mse_tr_ols; mse_te_s['mse_ols'] = mse_te_ols;
 r2_tr_s['r2_ols'] = r2_tr_ols; r2_te_s['r2_ols'] = r2_te_ols
 
 ## ---------- Ridge-regression ---------- ##
-n_lmbda = 6
-l_min,l_max = -10,10
-lmbda = np.logspace(l_min,l_max,n_lmbda)
 
 # Loop storage for output values from regression
 y_tr_ridge,y_ts_ridge     = {},{}
@@ -160,8 +168,6 @@ r2_tr_s['r2_lasso'] = r2_tr_lasso; r2_te_s['r2_lasso'] = r2_te_lasso
 err_b,bias_b,var_b = np.zeros(len(poly_deg)),np.zeros(len(poly_deg)),np.zeros(len(poly_deg))
 beta = []
 
-n_boots = 1000
-
 for i,p_d in enumerate(poly_deg):
     print('p =',p_d)
     
@@ -173,14 +179,6 @@ for i,p_d in enumerate(poly_deg):
     beta.append(beta_tmp)
 
 ## ---------- K-fold cross validation ---------- ##
-from sklearn.model_selection import KFold
-folds = 5; kfold = KFold(n_splits=folds)
-
-# Restating lambda in same range, with more values to get a smoother line
-N_lmbda = n_lmbda*5
-Lmbda = np.logspace(l_min,l_max,N_lmbda)
-
-## Kfold-method
 scores_ols, scores_ridge, scores_lasso = Reg_kfold(y_data=z_data,x_data=x_data,polydeg=poly_deg,folds=folds
                                                    ,lmbda=Lmbda,maxit=maxiter,scale=scaler)
 
@@ -210,7 +208,7 @@ for f in list(scores_ridge):
 
 ## ---------- Plotting results ---------- ##
 clrmap = ['inferno','twilight','viridis','gray','coolwarm']
-plotting = 'y'
+plotting = 'n'
 if plotting == 'y':
 
     lmbda = np.logspace(l_min,l_max,n_lmbda)
@@ -233,7 +231,6 @@ if plotting == 'y':
 
     ## Plotting beta-values for OLS
     beta_plot(poly_deg,betas['betas_ols'],labels=[r'$\hat{\beta}_{\text{OLS}}$',r'$\beta_{i}$',r'$\hat{\beta}$'])
-    beta_plot(poly_deg,betas['betas_ridge']['p_5'],labels=[r'$\hat{\beta}_{\text{OLS}}$',r'$\beta_{i}$',r'$\hat{\beta}$'])
 
     ## Plotting final result from bootstrapping vs. polynomial degree
     fig,bx = plt.subplots(1,1)
@@ -269,7 +266,6 @@ if plotting == 'y':
     for i in list(scores_ridge):
         ax.plot(np.log10(Lmbda),scores_ridge[i],label=i)
         bx.plot(np.log10(Lmbda),scores_lasso[i],label=i)
-        #ax[2].plot(np.log10(lmbda),scores_ols[i],label=i)
     ax.set_xlabel(r'log$_{10}$(λ)'); ax.set_ylabel('MSE',rotation=0,labelpad=15)
     ax.set_ylabel('MSE',rotation=0,labelpad=15)
     bx.set_xlabel(r'log$_{10}$(λ)'); bx.set_ylabel('MSE',rotation=0,labelpad=15)
@@ -307,13 +303,10 @@ if case == '1d':
     p_ridge = idx_r_poly+1; p_r = 'p_'+str(p_ridge)
     lmb_r = Lmbda[idx_min_r[idx_r_poly]]
     idx_r_lmb = np.where(lmbda == lmb_r)[0]
-    print(idx_r_lmb)
-    print(idx_r_lmb.size)
     if idx_r_lmb.size == 0:
         idx_r_lmb = np.abs(lmbda - lmb_r).argmin()
     else:
         idx_r_lmb = idx_r_lmb[0]
-    print(idx_r_lmb)
     X_ridge = poly_model_1d(x=x,poly_deg=idx_r_poly+1)
     b_ridge = betas['betas_ridge'][p_r][idx_r_lmb]
     intcepter = np.mean(np.mean(z) - np.mean(X_ridge,axis=0) @ b_ridge)
@@ -324,13 +317,10 @@ if case == '1d':
     p_lasso = idx_l_poly+1; p_l = 'p_'+str(p_lasso)
     lmb_l = Lmbda[idx_min_l[idx_l_poly]]
     idx_l_lmb = np.where(lmbda == lmb_l)[0]
-    print(idx_l_lmb)
-    print(idx_l_lmb.size)
     if idx_l_lmb.size == 0:
         idx_l_lmb = np.abs(lmbda - lmb_l).argmin()
     else:
         idx_l_lmb = idx_l_lmb[0]
-    print(idx_l_lmb)
     X_lasso = poly_model_1d(x=x,poly_deg=idx_l_poly+1)
     b_lasso = betas['betas_lasso'][p_l][idx_l_lmb]
     intcepter = np.mean(np.mean(z) - np.mean(X_lasso,axis=0) @ b_lasso)
@@ -359,13 +349,10 @@ else: # Used if dataset is 2D
     p_ridge = idx_r_poly+1; p_r = 'p_'+str(p_ridge)
     lmb_r = Lmbda[idx_min_r[idx_r_poly]]
     idx_r_lmb = np.where(lmbda == lmb_r)[0]
-    print(idx_r_lmb)
-    print(idx_r_lmb.size)
     if idx_r_lmb.size == 0:
         idx_r_lmb = np.abs(lmbda - lmb_r).argmin()
     else:
         idx_r_lmb = idx_r_lmb[0]
-    print(idx_r_lmb)
     X_ridge = poly_model_2d(x=xf,y=yf,poly_deg=p_ridge)
     b_ridge = betas['betas_ridge'][p_r][idx_r_lmb]
     intcepter = np.mean(np.mean(z) - np.mean(X_ridge,axis=0) @ b_ridge)
@@ -376,13 +363,10 @@ else: # Used if dataset is 2D
     p_lasso = idx_l_poly+1; p_l = 'p_'+str(p_lasso)
     lmb_l = Lmbda[idx_min_l[idx_l_poly]]
     idx_l_lmb = np.where(lmbda == lmb_l)[0]
-    print(idx_l_lmb)
-    print(idx_l_lmb.size)
     if idx_l_lmb.size == 0:
         idx_l_lmb = np.abs(lmbda - lmb_l).argmin()
     else:
         idx_l_lmb = idx_l_lmb[0]
-    print(idx_l_lmb)
     X_lasso = poly_model_2d(x=xf,y=yf,poly_deg=p_lasso)
     b_lasso = betas['betas_lasso'][p_l][idx_l_lmb]
     intcepter = np.mean(np.mean(z) - np.mean(X_lasso,axis=0) @ b_lasso)

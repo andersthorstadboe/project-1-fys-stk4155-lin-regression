@@ -34,18 +34,23 @@ np.random.seed(2018)
 #f_name = ['01-data/dom10_6702_4_10m_z33.tif','01-data/dtm10_6702_4_10m_z33.tif']
 #f_name = ['01-data/dtm10_6702_4_10m_z33.tif','01-data/dtm10_6801_3_10m_z33.tif']
 f_folder = '01-data/'
-f_name = ['Etnedal','Jotunheimen']
+f_name = ['Etnedal','Jotunheimen-2']
 #f_name = ['01-data/dtm1_33_120_123.tif','01-data/dtm1_33_113_126.tif']
 #f_name = ['01-data/dtm1_33_114_126.tif','01-data/dtm1_33_114_127.tif']
 #f_name = ['01-data/dtm1_33_120_123.tif','01-data/dtm1_33_120_124.tif']
 #f_name = ['01-data/dtm1_33_121_123.tif','01-data/dtm1_33_121_124.tif']
-f_path = [f_folder+f_name[0]+'.tif',f_folder+f_name[1]+'.tif']
+f_path = [f_folder+f_name[0]+'.tif',f_folder+f_name[1]+'.tiff']
+f_path = [f_folder+f_name[1]+'.tiff']
+n = 1
+z_data = []; z_data.append(imread(f_path[0])[::n,::n])
+plt.imshow(z_data)
+plt.show()
 # Show the terrain
-fig,ax = plt.subplots(1,2)
+fig,ax = plt.subplots(1,1)
 fig.suptitle('Terrains')
 j = 0
-z_data = []
-n = 13
+
+n = 1
 for i, bx in enumerate(ax):
     
     z_data.append(imread(f_path[i])[::n,::n])#,imread(f_name[j+1])]

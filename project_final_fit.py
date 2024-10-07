@@ -25,7 +25,7 @@ shw = 'y'; save = False
 a, b   = 1.0, 1.5                                           # Coefficients for exponential model
 c0, c1 = 0.01, 0.9                                          # Noise scaling    
 x0, xN = 0, 1                                               # Start and end of domain, x-axis
-y0, yN = 0, 1                                             # Start and end of domain, y-axis
+y0, yN = 0, 1                                               # Start and end of domain, y-axis
 Nx, Ny = 100, 100                                           # Number of sample points
 
 x   = np.sort(np.random.uniform(x0,xN,Nx)).reshape(-1,1)    # Mesh points on x-axis (uniformly distributed, sorted values)
@@ -60,18 +60,13 @@ elif case == 'Franke':
 else:
     f_name = ['Etnedal','Jotunheimen']
     z_data, xx, yy, Nx, Ny, im = imageData(f_name=f_name)
-    # Surface plot of dataset
     if im == 1:
         p_ols = 6; p_ridge = 9; p_lasso = 9
         lmbda_ridge = [7e3]; lmbda_lasso = [6e1]
-        #p_ols = 6; p_ridge = 10; p_lasso = 10
-        #lmbda_ridge = [2e3]; lmbda_lasso = [1e-10]
         plot2D(xx,yy,z_data,labels=[f_name[im-1],'X','Y','m.a.s'],save=save,f_name='data_etne_final')
     elif im == 2:
         p_ols = 6; p_ridge = 10; p_lasso = 10
         lmbda_ridge = [2e3]; lmbda_lasso = [1e-10]
-        #p_ols = 6; p_ridge = 9; p_lasso = 9
-        #lmbda_ridge = [7e3]; lmbda_lasso = [6e1]
         plot2D(xx,yy,z_data,labels=[f_name[im-1],'X','Y','m.a.s'],save=save,f_name='data_jotun_final')
 
 if case == '1d':
@@ -112,7 +107,8 @@ if case == '1d':
     z_ols = (X_ols @ beta_ols + intcept_ols)
     z_ridge = (X_ridge @ beta_ridge + intcept_ridge)
     z_lasso = (X_lasso @ beta_lasso[0] + intcept_lasso)
-
+    
+    ## Plotting 1D-data
     z = [zz_data,z_ols,z_ridge.reshape(-1,1),z_lasso.reshape(-1,1)]
     plot1D(x_data=x,y_data=z,labels=['Predictions','X','Y','Data','OLS','Ridge','Lasso'])
 
@@ -125,6 +121,8 @@ else:
     z_ols = (X_ols @ beta_ols + intcept_ols).reshape(Nx,Ny)
     z_ridge = (X_ridge @ beta_ridge + intcept_ridge).reshape(Nx,Ny)
     z_lasso = (X_lasso @ beta_lasso[0] + intcept_lasso).reshape(Nx,Ny)
+
+    ## Plotting 2D-data
     if case == 'topo':
         if im == 1:
             plot2D(xx,yy,z_ols,labels=['OLS-prediction','X','Y','m.a.s'],save=save,f_name='ols_pred_etne_final')
@@ -139,9 +137,8 @@ else:
         plot2D(xx,yy,z_ols,labels=['OLS-prediction','X','Y','Z'])
         plot2D(xx,yy,z_ridge,labels=['Ridge-prediction','X','Y','Z'])
         plot2D(xx,yy,z_lasso,labels=['Lasso-prediction','X','Y','Z'])
-print(len(beta_ols))
-print(len(beta_ridge[0]))
-print(len(beta_lasso[0]))
+
+## Plotting final beta values
 x1 = np.arange(1,len(beta_ols)+1)
 x2 = np.arange(1,len(beta_ridge[0])+1)
 fig,ax = plt.subplots(1,1)
@@ -150,10 +147,5 @@ ax.plot(x2,beta_ridge[0],'--p',label='Ridge')
 ax.plot(x2,beta_lasso[0],'--x',label='Lasso')
 ax.set_xticks(np.arange(1,len(x2)+1,2),labels=[f'${{\\beta_{{{x}}}}}$' for x in x2[::2]])
 ax.legend(); ax.grid(); ax.set_title(r'$\beta$s for final fit'); ax.set_ylabel(r'$\beta_{i}$')
-fig,bx = plt.subplots(2,1)
-bx[0].plot(x1,beta_ols,'--s',label='OLS')
-bx[1].plot(x2,beta_ridge[0],'--p',label='Ridge')
-bx[1].plot(x2,beta_lasso[0],'--x',label='Lasso')
-bx[1].legend(); bx[0].legend()
 
 plt.show()

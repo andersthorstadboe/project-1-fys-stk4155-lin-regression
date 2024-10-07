@@ -270,21 +270,6 @@ def beta_plot(x_data: np.ndarray,b_data: dict,labels: list=['','','']):
    for i, l in enumerate(f):
       b = np.arange(1,len(b_data[l])+1)
       ax.plot(b,b_data[l],'--p')
-      
-      '''if i <= int(len(f)-3):#/2):
-         ax[0].plot(b,b_data[l],'--p')
-         ax[0].set_xticks(np.arange(1,len(b)+1),labels=[f'${{\\beta_{{{x}}}}}$' for x in b])
-      elif i <= int(len(f)-2):
-         ax[1].plot(b,b_data[l],'--p')
-         ax[1].set_xticks(np.arange(1,len(b)+1),labels=[f'${{\\beta_{{{x}}}}}$' for x in b])
-      else:
-         ax[2].plot(b,b_data[l],'--p')
-         ax[2].set_xticks(np.arange(1,len(b)+1),labels=[f'${{\\beta_{{{x}}}}}$' for x in b])
-   
-   ax[0].set_xlabel(labels[1]); ax[0].set_ylabel(labels[2],rotation=0,labelpad=15)
-   ax[1].set_xlabel(labels[1]); ax[1].set_ylabel(labels[2],rotation=0,labelpad=15)
-   fig.suptitle(labels[0]+r' for $p =$ %i' %(int(x_data[i])))
-   ax[0].grid(); ax[1].grid()'''
    ax.set_xticks(np.arange(1,len(b)+1),labels=[f'${{\\beta_{{{x}}}}}$' for x in b])
    ax.set_xlabel(labels[1]); ax.set_ylabel(labels[2],rotation=0,labelpad=15)
    fig.suptitle(labels[0]+r' for $p =$ %i' %(int(x_data[i])))
@@ -370,7 +355,7 @@ def plot2D(x_data, y_data, z_data, labels: list=['','','',''], save=False, f_nam
    f1 = ax.plot_surface(x_data,y_data,z_data,cmap='viridis')
    ax.set_aspect(aspect='auto')
    ax.view_init(elev=25, azim=-30)
-   ax.set_title(labels[0]); ax.set_xlabel(labels[1])#; bx.set_title('Noise'); plt.show()
+   ax.set_title(labels[0]); ax.set_xlabel(labels[1])
    ax.set_ylabel(labels[2]); ax.set_zlabel(labels[3])
    ax.tick_params(axis='both', which='major', labelsize=6)
    fig.tight_layout()
@@ -382,7 +367,6 @@ def plot2D(x_data, y_data, z_data, labels: list=['','','',''], save=False, f_nam
 def imageData(f_name):
    f_folder = '01-data/'
    f_path = [f_folder+f_name[0]+'.tif',f_folder+f_name[1]+'.tif']
-
    n = 1                                                           # Initial downsampling of .tif-data
    z_data = []
    for i in range(len(f_path)):
