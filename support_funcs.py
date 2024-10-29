@@ -73,6 +73,8 @@ def exp2D(x,y,x_noise,y_noise,a,b,noise=0.0):
 
    return p1 + noise*x_noise + noise*y_noise
 
+
+
 ### Other supporting functions
 def poly_model_1d(x: np.ndarray, poly_deg: int, intcept=False):
    """
